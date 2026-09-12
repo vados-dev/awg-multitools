@@ -1,0 +1,7 @@
+awg_optimize_sysctl_kernel_printk
+awg_optimize_sysctl_buffers
+awg_optimize_sysctl_ip_tcpip
+awg_optimize_sysctl_ip_tcp
+awg_optimize_sysctl_minimal
+optimize_swap
+awg_optimize_nic

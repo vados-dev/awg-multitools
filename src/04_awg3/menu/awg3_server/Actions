@@ -1,0 +1,8 @@
+awg3_show
+awg3_edit_default_env
+awg3_set_endpoint
+awg3_gen
+awg3_backup
+awg3_server_init
+awg3_force_server_init
+awg3_server_upgrade

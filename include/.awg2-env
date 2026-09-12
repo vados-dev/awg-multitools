@@ -1,0 +1,17 @@
+### Стартовые переменные для AWG2:
+##################################
+AWG2_CONFIGS="${VPN_CONFIGS}/awg2"
+AWG2_HELPERS="${VPN_HELPERS}/awg2"
+AWG2_SCRIPTS="${AWG2_HELPERS}/scripts"
+AWG2_SETUP="${AWG2_HELPERS}/setup"
+
+AWG2_ACTIVE_IFACE=""
+AWG2_VER=""
+
+#-> AWG2: умолчания:
+awg2_def_ver="2.0"
+awg2_def_iface="awg2"
+awg2_def_port="43034"
+awg2_def_dns="8.8.4.4"
+awg2_def_allowed_ips="0.0.0.0/1, 128.0.0.0/1"
+awg2_def_subnet="10.2.2.0/24"

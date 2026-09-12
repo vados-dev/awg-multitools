@@ -1,0 +1,11 @@
+menu_awg3_server
+menu_awg3_clients
+awg3_restart
+awg3_start
+awg3_stop
+awg3_enable
+awg3_disable
+awg3_start
+awg3_stop
+awg3_uninstall
+awg3_install

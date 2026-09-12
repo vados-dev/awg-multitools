@@ -1,0 +1,4 @@
+### Переменные для NetworkManager Command Line Interface (nmcli):
+#################################################################
+NMCLI_CONF_DIR="${VPN_CONFIGS}/nmcli"
+NMCLI_DEF_CONF="${NMCLI_CONF_DIR}/${NMCLI_DEF_IFACE}.conf"

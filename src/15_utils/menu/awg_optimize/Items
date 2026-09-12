@@ -1,0 +1,7 @@
+Подавление kernel warning/notice
+Настройка Адаптивных буферов
+Настройка IP Forwarding и TCP/IP Hardening
+Настройка BBR, Conntrack и Security
+Настройка минимального sysctl
+Оптимизация swap
+Оптимизация сетевого интерфейса

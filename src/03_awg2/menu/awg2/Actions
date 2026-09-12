@@ -1,0 +1,10 @@
+awg2_show_status
+awg2_create_iface
+awg2_toggle_iface
+awg2_restart_iface
+awg2_change_dns
+awg2_delete_iface
+awg2_add_client
+awg2_show_client
+awg2_delete_client
+awg2_test_obf

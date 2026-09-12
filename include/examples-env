@@ -1,0 +1,293 @@
+#cols=$(tput cols)
+#lines=$(tput lines)
+#numcols=$(((cols-6)/2))
+#numlines=$((lines/2))
+
+#show_wg_logo() {
+#tput setaf $((${ABS_CENTER}))
+#printf "${bnc}%s\n" "test"
+#printf ""
+#tput cup $toend
+#printf "$(cecho sM %*s)\n" $ABS_CENTER "
+#          _       ___                                      __
+#         | |     / (_)_______  ____ ___  ______ __________/ /
+#         | | /| / / / ___/ _ \/ __  / / / / __  / ___/ __  /
+#         |/ |/ / / /  /  __/ /_/ / /_/ / /_/ / /  / /_/ / /
+#         |__/|__/_/_/   \___/\__  /\__ _/\__ _/_/   \__ _/
+#                            /____/                       "
+#}
+
+#OFFSET=$(( (cols - ${#WG_LOGO}) / 2 ))
+#tput cup $numlines $OFFSET
+#printf "%06d\n" "$WG_LOGO"
+#printf "${bnc}${mag}%06d\n" "$WgLogo"
+#echo -en "${nc}\n\n"
+
+
+#printf "%s\n" "$(align::center $COLS_NUM " ")"
+#printf "%s\n" "$(align::center $COLS_NUM "$pr_name $app_version")"
+#printf "%s\n" "$(align::center $COLS_NUM "$pr_descr")"
+#printf "%s\n" "$(align::center $COLS_NUM " ")"
+#printf "%s\n" "$(align::center $COLS_NUM " ")"
+#printf "%s\n" "$(align::center $((${COLS_NUM} + 31)) " ${sym_star} $(cecho sM "${pr_phrase}") ${sym_star} ")"
+
+#wg_header() {
+#    clear
+#    show_window_head
+#    show_wg_logo
+#}
+
+multiselect2() {
+#    ESC=$(echo -e "\033")
+    toggle_option()    {
+      local arr_name=$1
+      eval "local arr=(\"\${${arr_name}[@]}\")"
+      local option=$2
+      if [[ ${arr[option]} == true ]]; then
+        arr[option]=
+      else
+        arr[option]=true
+      fi
+      eval $arr_name='("${arr[@]}")'
+    }
+    turnoff_option()    {
+      local arr_name=$1
+      eval "local arr=(\"\${${arr_name}[@]}\")"
+      local option=$2
+      arr[option]=false
+      eval $arr_name='("${arr[@]}")'
+    }
+    local retval=$1
+    local options
+    local defaults
+    IFS=' ' read -r -a options <<< "$2"
+    if [[ -z $3 ]]; then
+      defaults=()
+    else
+      IFS=' ' read -r -a defaults <<< "$3"
+    fi
+    local selected=()
+    for ((i=0; i<${#options[@]}; i++)); do
+      selected+=("${defaults[i]:-false}")
+      printf "\n"
+    done
+    # determine current screen position for overwriting the options
+    local lastrow=`get_cursor_row`
+    local startrow=$(($lastrow - ${#options[@]}))
+    # ensure cursor and input echoing back on upon a ctrl+c during read -s
+    trap "cursor_blink_on; stty echo; printf '\n'; exit" 2
+    cursor_blink_off
+    local active=0
+    while true; do
+        # print options by overwriting the last lines
+        local idx=0
+        for option in "${options[@]}"; do
+            local prefix="..."
+            if [[ ${selected[idx]} == true ]]; then
+              prefix="V"
+            fi
+            cursor_to $(($startrow + $idx))
+            if [ $idx -eq $active ]; then
+                print_active "$option" "$prefix"
+            else
+                print_inactive "$option" "$prefix"
+            fi
+            ((idx++))
+        done
+        case `key_input` in
+            space)  toggle_option selected $active;;
+            enter)  break;;
+            up)     ((active--));
+                    if [ $active -lt 0 ]; then active=$((${#options[@]} - 1)); fi;;
+            down)   ((active++));
+                    if [ $active -ge ${#options[@]} ]; then active=0; fi;;
+            left)   toggle_option selected $active;;
+            right)  turnoff_option selected $active;;
+            cancel) log_cancel; return 1 ;;
+        esac
+    done
+    cursor_to $lastrow
+    printf "\n"
+    cursor_blink_on
+    eval $retval='("${selected[@]}")'
+}
+
+multiselect_43p() {
+    local return_value=$1
+    local colmax=$2
+    local offset=$3
+    local -n options=$4
+    local -n defaults=$5
+    local title=$6
+
+    err=`checkwinsize $(( ${#options[@]}/$colmax )) $(( ${TERM_ROWS} - 2)); echo $?`
+    if [[ ! $err == 0 ]]; then
+        log_error "Размер вашего окна ${TERM_ROWS} строк, что несовместимо с количеством пунктов меню ${#msItems[@]}!"
+        cursor_to $lastrow
+        return 1
+    fi
+
+    local selected=()
+    for ((i=0; i<${#options[@]}; i++)); do
+        if [[ ${defaults[i]} = "true" ]]; then
+            selected+=("true")
+        else
+            selected+=("false")
+        fi
+        printf "\n"
+    done
+    toggle_option() {
+        local option=$1
+        if [[ ${selected[option]} == true ]]; then
+            selected[option]=false
+        else
+            selected[option]=true
+        fi
+    }
+    cursor_to $(( $TERM_ROWS - 2 ))
+    printf "_%.s" $(seq $TERM_COLS)
+    printf "%s" "$(cecho sfW ' Действия: ')$(cecho s '│')$(cecho sWb ' Выбрать: клавиша  [пробел]  ')$(cecho s '│')$(cecho sWb ' (снять)выбрать все: клавиша ([n])[a] ')$(cecho s '│')$(cecho sWb ' перемещение: клавиши вверх↑/вниз↓/лево/право или клавиши k/j/l/h ')$(cecho s '│')$(cecho sWb ' применить выбор: клавиша  [Enter] ')"
+
+    # determine current screen position for overwriting the options
+    local lastrow=`get_cursor_row`
+    local lastcol=`get_cursor_col`
+    local startrow=$(($lastrow - ${#options[@]}))
+    local startcol=$(($lastcol - ${#options[@]}))
+    # ensure cursor and input echoing back on upon a ctrl+c during read -s
+    trap "cursor_blink_on; stty echo; printf '\n'; exit" 2
+    cursor_blink_off
+
+    print_options() {
+        # print options by overwriting the last lines
+        local idx=0
+        for option in "${options[@]}"; do
+            local prefix="[ ]"
+            if [[ ${selected[idx]} == true ]]; then
+              prefix="[\e[38;5;46m✔\e[0m]"
+            fi
+            cursor_to $(($startrow + $idx))
+            if [ $idx -eq $1 ]; then
+                print_active "$option" "$prefix"
+            else
+                print_inactive "$option" "$prefix"
+            fi
+            ((idx++))
+        done
+    }
+    local active=0
+    while true; do
+        print_options $active
+        case `key_input` in
+            space)  toggle_option $active;;
+            enter)  print_options -1; break;;
+            up)     ((active--));
+                    if [ $active -lt 0 ]; then active=$((${#options[@]} - 1)); fi;;
+            down)   ((active++));
+                    if [ $active -ge ${#options[@]} ]; then active=0; fi;;
+            cancel) log_cancel; return 1 ;;
+        esac
+    done
+    cursor_to $lastrow
+    printf "\n"
+    cursor_blink_on
+    eval $return_value='("${selected[@]}")'
+}
+
+#-> Использование:
+# ask_multiselect "$array" "$arrPreSelect"[or false] "Title"
+function prompt_for_multiselect {
+    toggle_option()    {
+      local arr_name=$1
+      eval "local arr=(\"\${${arr_name}[@]}\")"
+      local option=$2
+      if [[ ${arr[option]} == true ]]; then
+        arr[option]=
+      else
+        arr[option]=true
+      fi
+      eval $arr_name='("${arr[@]}")'
+    }
+
+    local retval=$1
+    local options
+    local defaults
+
+    IFS=';' read -r -a options <<< "$2"
+    if [[ -z $3 ]]; then
+      defaults=()
+    else
+      IFS=';' read -r -a defaults <<< "$3"
+    fi
+    local selected=()
+
+    for ((i=0; i<${#options[@]}; i++)); do
+      selected+=("${defaults[i]:-false}")
+      printf "\n"
+    done
+
+    printf '    %s\n' "$(cecho sW "$prompt")"
+    multi_legend "$help_flag"
+
+    local lastrow=`get_cursor_row`
+    local startrow=$(($lastrow - ${#options[@]}))
+
+    trap "cursor_blink_on; stty echo; printf '\n'; exit" 2
+    cursor_blink_off
+
+    local active=0
+    while true; do
+        local idx=0
+        for option in "${options[@]}"; do
+            local prefix=".."
+            if [[ ${selected[idx]} == true ]]; then
+              prefix="√"
+            fi
+            cursor_to $(($startrow + $idx))
+            if [ $idx -eq $active ]; then
+                print_active "$option" "$prefix"
+            else
+                print_inactive "$option" "$prefix"
+            fi
+            ((idx++))
+        done
+
+        case `key_input` in
+            space)  toggle_option selected $active;;
+            enter)  break;;
+            up)     ((active--));
+                    if [ $active -lt 0 ]; then active=$((${#options[@]} - 1)); fi;;
+            down)   ((active++));
+                    if [ $active -ge ${#options[@]} ]; then active=0; fi;;
+            cancel) log_cancel; return 1;;
+        esac
+    done
+    cursor_to $lastrow
+    printf "\n"
+    cursor_blink_on
+    eval $retval='("${selected[@]}")'
+}
+#        local str_len=${#clr_str}
+#        local _str="$(cecho sWb ' Действия: ')$(cecho sW '│')$(cecho sWb ' Выбрать: [пробел] ')$(cecho sW '│')$(cecho sWb ' (снять)выбрать все: ([n])[a] ')$(cecho sW '│')$(cecho sWb " перемещение: →/←/↑/↓ или k/j/l/h ")$(cecho sW '│')$(cecho sWb ' применить выбор: [Enter] ')$(cecho sW '│')$(cecho sWb ' возврат: 0 ')"
+#        local _str=$(printf '\e[1;37;44m Действия: \e[0;1m│\e[1;37;44m Выбрать: [пробел] \e[0;1m│\e[1;37;44m (снять)выбрать все: ([n])[a] \e[0;1m│\e[1;37;44m перемещение: →/←/↑/↓ или k/j/l/h \e[0;1m│\e[1;37;44m применить выбор: [Enter] \e[0;1m│\e[1;37;44m возврат: 0 \e[0m')
+#        local -- len=${#_str}
+
+#ask_mini_multisel() {
+#    local help_flag=$1
+#    local retval="$2"
+#    local ammItems=$3
+#    local prompt="$4"
+#    for i in "${!ammItems[@]}"; do
+#        opt_str+="${ammItems[$i]}"
+#    done
+#    mini_multiselect $help_flag selected "$opt_str" false "$prompt"
+#    for i in "${!selected[@]}"; do
+#        if [ "${selected[$i]}" == "true" ]; then
+#            checked+=("${ammItems[$i]}")
+#        fi
+#    done
+#    eval $retval='("${checked[@]}")'
+#}
+#
+#
+#     _       ___                                      __
+#

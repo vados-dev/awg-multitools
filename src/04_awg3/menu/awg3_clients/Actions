@@ -1,0 +1,10 @@
+awg3_list
+awg3_add_peer
+awg3_remove_peer
+awg3_show_client
+awg3_migrate
+awg3_generate_link
+awg3_list_client_names
+awg3_peer_status
+awg3_load_peer_dump
+awg3_stats

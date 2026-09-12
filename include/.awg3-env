@@ -1,0 +1,68 @@
+### Стартовые переменные для AWG3:
+##################################
+AWG3_SCRIPT_VERSION="1.2.0"
+AWG3_CONF_VER="config version: v$(date '+%Y%m%d-%H%M')-3.1 ($pr_owner edition)."
+
+AWG3_HOME="${PROJ_ROOT_DIR}/awg3"
+AWG3_CONFIGS="${VPN_CONFIGS}/awg3"
+AWG3_HELPERS="${VPN_HELPERS}/awg3"
+
+AWG3_SERVER_CONFIGS="${AWG3_CONFIGS}/server"
+AWG3_SERVER_KEYS="${AWG3_SERVER_CONFIGS}/keys"
+
+AWG3_IFACE="${AWG3_IF:-awg3vds}"
+
+AWG3_SYSCONF="${AWG_SYSCONF}/${AWG3_IFACE}.conf"
+
+AWG3_CLIENTS_CONFIGS="${AWG3_CONFIGS}/clients"
+AWG3_LEGACY_KEYS="${AWG3_CLIENTS_CONFIGS}/keys"
+
+AWG3_DEFAULT_ENV="${AWG3_CONFIGS}/.default-env"
+AWG3_LOCK_DIR="/var/run"
+
+#AWG3_REPO="${github_url}${pr_owner}/awg-tools"
+#AWG3_BRANCH="main"
+
+AWG3_BACKUPS_DIR="${PROJ_BACKUPS_ROOT}/awg3"
+AWG3_SYSCONF_BAK="${AWG3_BACKUPS_DIR}/sysconf"
+AWG3_PURGE="true"
+
+# Границы второго октета для случайной подсети. Диапазон подобран так, чтобы разойтись и с типовыми домашними сетями (10.0.x, 10.1.x),
+# и с тем, что предлагает AWG 2.0 (10.100-102, 10.44.5).
+AWG3_SUBNET_OCTET_MIN=33
+AWG3_SUBNET_OCTET_MAX=188
+
+AWG3_KEEPALIVE="12"
+
+readonly AWG3_PROTOCOL="3.0"
+
+# device/noise-types.go: HeaderCipherNonceSize. При включённой защите заголовка
+# nonce читается из первых NONCE_SIZE байт padding'а, поэтому S1-S4 не могут быть короче.
+readonly AWG3_NONCE_SIZE=12
+readonly AWG3_S4_MAX=32
+
+#-> Далее от другого скрипта, но это не точно
+# Список утилит, без которых сборка не поедет. Держим отдельно от apt-пакетов:
+# проверяем наличие команд, а не то, что пакет числится установленным.
+#AWG3_REQUIRED_TOOLS=(git make curl python3)
+#AWG3_RESERVED_ENV="${AWG3_CONF_PREF}/reserved.env"
+# Папка проекта на сервере. Скачивается один раз и дальше обновляется на месте: и установщик, и --update работают с ней, а не с тем, что случайно оказалось рядом со скриптом.
+#AWG3_SRC_DIR="${AWG3_HOME_PREF}/src"
+#AWG3_BIN_DIR="${AWG3_HOME_PREF}/bin"
+#AWG3_LIB_DIR="${AWG3_HOME_PREF}/lib"
+#AWG3_VENV_DIR="${AWG3_HOME_PREF}/venv"
+# Репозиторий самой тулзы. Нужен для однокомандной установки, когда скрипт скачан отдельно и пакета awg3/ рядом нет.
+#AWG3_REPO="https://github.com/pumbaX/awg-toolza3.0"
+#AWG3_ROUTE_TABLE=210
+#AWG3_IPTABLES_TAG="awg3"
+#AWG3_GO_REPO="https://github.com/amnezia-vpn/amneziawg-go"
+#AWG3_GO_MIN="1.21"      # минимум, при котором Go умеет докачивать toolchain
+#AWG3_GO_REQUIRED=""     # заполняется из go.mod в fetch_sources
+#AWG3_BUILD_DIR="/tmp/awg3-build"
+
+#AWG3_PROBE_WRAPPER="/usr/local/bin/awg3-probe
+#AWG3_CLI_WRAPPER="/usr/local/bin/awg3
+
+# Пути AWG 2.0 — ТОЛЬКО ДЛЯ ЧТЕНИЯ.
+#AWG2_CONF="/etc/amnezia/amneziawg/awg0.conf"
+#AWG3_ACTION="menu"

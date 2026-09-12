@@ -1,0 +1,11 @@
+### nmcli-env:
+##############
+NMCLI_DEF_IFACE="awg2home"
+NMCLI_DEF_ZONE="VPN-trusted"
+NMCLI_ENDPOINT=""
+NMCLI_ENDPOINT_PORT="51820"
+NMCLI_ALLOWED_IPS="0.0.0.0/0"
+
+### AWG3:
+#########
+AWG3_DEF_IFACE="awg3vds"
