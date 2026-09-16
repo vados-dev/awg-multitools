@@ -3,6 +3,8 @@
 AWG3_SCRIPT_VERSION="1.2.0"
 AWG3_CONF_VER="config version: v$(date '+%Y%m%d-%H%M')-3.1 ($pr_owner edition)."
 
+AWG3_DEFAULT_IFACE="awg3vds"
+
 AWG3_HOME="${PROJ_ROOT_DIR}/awg3"
 AWG3_CONFIGS="${VPN_CONFIGS}/awg3"
 AWG3_HELPERS="${VPN_HELPERS}/awg3"
@@ -10,12 +12,13 @@ AWG3_HELPERS="${VPN_HELPERS}/awg3"
 AWG3_SERVER_CONFIGS="${AWG3_CONFIGS}/server"
 AWG3_SERVER_KEYS="${AWG3_SERVER_CONFIGS}/keys"
 
-AWG3_IFACE="${AWG3_IF:-awg3vds}"
-
-AWG3_SYSCONF="${AWG_SYSCONF}/${AWG3_IFACE}.conf"
+AWG3_SYSCONF="${AWG_SYSCONF}/${AWG3_DEFAULT_IFACE}.conf"
 
 AWG3_CLIENTS_CONFIGS="${AWG3_CONFIGS}/clients"
 AWG3_LEGACY_KEYS="${AWG3_CLIENTS_CONFIGS}/keys"
+
+AWG3_SERVICE="awg3-quick@${AWG3_DEFAULT_IFACE}.service"
+AWG3_QUICK_SCRIPT="${AWG3_HELPERS}/"
 
 AWG3_DEFAULT_ENV="${AWG3_CONFIGS}/.default-env"
 AWG3_LOCK_DIR="/var/run"
@@ -40,6 +43,30 @@ readonly AWG3_PROTOCOL="3.0"
 # nonce читается из первых NONCE_SIZE байт padding'а, поэтому S1-S4 не могут быть короче.
 readonly AWG3_NONCE_SIZE=12
 readonly AWG3_S4_MAX=32
+
+### Умолчания:
+##############
+#-> Клиент:
+AWG3_DEFAULT_ADDRESS="10.31.31.1/24"
+AWG3_DEFAULT_ALLOWED_IPS="0.0.0.0/0"
+AWG3_DEFAULT_DNS="8.8.4.4, 1.0.0.1"
+
+#-> Файрволл:
+AWG3_DEFAULT_FW_POLICY="GW-VPN-to-world"
+AWG3_DEFAULT_FW_SERVICE="VPN-awg3vds-ports"
+AWG3_DEFAULT_FW_ZONE="VPN-clients"
+
+#-> Сервер:
+# Параметры server-init и создания/пересоздания .default-env:
+#-> Если 1 server-init будет игнорировать наличие имеющегося конфига:
+AWG3_SRV_FORCE=0
+#-> Пустой AWG3_SRV_PORT означает «выбрать случайный»: предсказуемый порт сам по себе является признаком.
+AWG3_DEFAULT_PORT="31031"
+AWG3_DEFAULT_SUBNET="10.31.31.1/24"
+AWG3_DEFAULT_MTU="1320"
+AWG3_DEFAULT_ISOLATION="off"
+AWG3_DEFAULT_IPV6="off"
+AWG3_DEFAULT_IPV6_SUBNET="fddd:2c4:2c4:2c4::/64"
 
 #-> Далее от другого скрипта, но это не точно
 # Список утилит, без которых сборка не поедет. Держим отдельно от apt-пакетов:

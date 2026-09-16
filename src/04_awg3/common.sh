@@ -2,7 +2,6 @@
 ################################
 awg3env_inc="${INCLUDE_DIR}/.awg3-env"
 source ${awg3env_inc}
-
 source ${AWG3_DEFAULT_ENV}
 
 CUSTOM_LOGS_DIR=/var/log/awg3
@@ -275,7 +274,7 @@ awg3_gen_shared_params() {
 declare -A PK_HS PK_RX PK_TX PK_EP
 awg3_load_peer_dump() {
     local dump pk psk ep aips hs rx tx ka
-    dump=$(awg show "$AWG3_IFACE" dump 2>/dev/null) || return 1
+    dump=$(awg show "$AWG3_SRV_IFACE" dump 2>/dev/null) || return 1
     [[ -n "$dump" ]] || return 1
     while IFS=$'\t' read -r pk psk ep aips hs rx tx ka; do
         [[ -n "$pk" ]] || continue
@@ -322,33 +321,35 @@ awg3_format_bytes() {
 }
 
 #-> Команды: show, restart:
-awg3_show() { awg show "$AWG3_IFACE" || log_warn "Интерфейс $AWG3_IFACE не поднят."; }
+awg3_show() { awg show "$AWG3_SRV_IFACE" || log_warn "Интерфейс $AWG3_SRV_IFACE не поднят."; }
 
-awg3_restart() {
-    log "Перезапуск awg-quick@${AWG3_IFACE}..."
-    if systemctl restart "awg-quick@${AWG3_IFACE}"; then
-        log_ok "Сервис перезапущен."
-    else
-        log_warn "Перезапуск не удался, смотрите: systemctl status awg-quick@${AWG3_IFACE}."
-    fi
-    systemctl is-active "awg-quick@${AWG3_IFACE}"
-}
+#awg3_restart() {
+#    log "Перезапуск awg-quick@${AWG3_SRV_IFACE}..."
+#    if systemctl restart "awg-quick@${AWG3_SRV_IFACE}"; then
+#        log_ok "Сервис перезапущен."
+#    else
+#        log_warn "Перезапуск не удался, смотрите: systemctl status awg-quick@${AWG3_SRV_IFACE}."
+#    fi
+#    systemctl is-active "awg-quick@${AWG3_SRV_IFACE}"
+#}
 
-#-> Команда: backup:
-# Архив кладётся в ~/awg/backups и содержит серверный конфиг, каталоги клиентов и ключи сервера. 
+### Команда: backup:
+####################
+# Архив кладётся в ~/awg/backups и содержит серверный конфиг, каталоги клиентов и ключи сервера.
 # Старые архивы НЕ удаляются сами: чистка — только явным --prune N, и с подтверждением.
 awg3_backup() {
     local bdir="$AWG3_BACKUPS_DIR"
-    mkdir -p "$bdir" || log_warn "не создан $bdir"
+    mkdir -p "$bdir" || { failure_box log_error "Не создан ${bdir}!"; return 1; }
     chmod 700 "$bdir"; _fix_owner "$bdir"
     # Миллисекунды в имени: два бэкапа в одну секунду (backup сразу после remove, например) иначе молча затирают друг друга.
     local ts archive
     ts=$(date '+%Y%m%d-%H%M%S.%3N')
     archive="$bdir/awg_backup_${ts}.tar.gz"
     local staging
-    staging=$(mktemp -d "${bdir}/.stage.XXXXXX") || log_warn "mktemp не сработал"
+    staging=$(mktemp -d "${bdir}/.stage.XXXXXX") || { failure_box log_error "mktemp не сработал."; return 1; }
     mkdir -p "$staging/server" "$staging/clients"
     if [[ -f "$AWG3_SYSCONF" ]]; then cp -a "$AWG3_SYSCONF" "$staging/server/"; fi
+    if [[ -f "$AWG3_DEFAULT_ENV" ]]; then cp -a "$AWG3_DEFAULT_ENV" "$staging/server/"; fi
     local f
     for f in "$AWG3_SERVER_KEYS/server_private.key" "$AWG3_SERVER_KEYS/server_public.key"; do
         if [[ -f "$f" ]]; then cp -a "$f" "$staging/server/"; fi
@@ -367,27 +368,27 @@ awg3_backup() {
     done < <(awg3_list_client_names)
     if ! tar -czf "$archive" -C "$staging" server clients; then
         rm -rf "$staging"
-        log_error "не создан архив $archive"
+        failure_box log_error "Не создан архив ${archive}."
     fi
     rm -rf "$staging"
     chmod 600 "$archive"; _fix_owner "$archive"
-    log_ok "бэкап создан: $archive"
-    log "  клиентов в архиве: $count, размер: $(du -h "$archive" | cut -f1)"
+    log_ok "Бэкап создан: ${archive}."
+    log "Клиентов в архиве: $count, размер: $(du -h "$archive" | cut -f1)."
     local total
     total=$(find "$bdir" -maxdepth 1 -name 'awg_backup_*.tar.gz' | wc -l)
-    log "  всего архивов: $total"
+    log "Всего архивов: ${total}."
     if [[ -n "$AWG3_PRUNE_KEEP" ]]; then
         local old=()
         mapfile -t old < <(find "$bdir" -maxdepth 1 -name 'awg_backup_*.tar.gz' | sort -r | tail -n +$((AWG3_PRUNE_KEEP + 1)))
         if [[ "${#old[@]}" -eq 0 ]]; then
-            log "  удалять нечего, архивов не больше $AWG3_PRUNE_KEEP"
+            log "Удалять нечего, архивов не больше ${AWG3_PRUNE_KEEP}."
             return 0
         fi
         log "Будут удалены старые архивы:"
-        printf '  %s\n' "${old[@]}"
+        printf '   %s\n' "${old[@]}"
         ask_confirm "Удалить?" || return 1
         rm -f "${old[@]}"
-        log_ok "Удалено архивов: ${#old[@]}."
+        success_box log_ok "Удалено архивов: ${#old[@]}."
     fi
 }
 

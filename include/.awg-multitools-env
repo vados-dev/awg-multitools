@@ -36,6 +36,7 @@ secure_inc="${PROJ_SECURE_DIR}/.private-env"
 env_inc="${INCLUDE_DIR}/.${PROJ_NAME}-env"
 colors_inc="${INCLUDE_DIR}/.${PROJ_NAME}-colors"
 output_inc="${INCLUDE_DIR}/.${PROJ_NAME}-output"
+input_inc="${INCLUDE_DIR}/.${PROJ_NAME}-input"
 functions_inc="${INCLUDE_DIR}/.${PROJ_NAME}-functions"
 firewall_inc="${HOME_DIR}/.firewalld/.fw_cmd-env"
 

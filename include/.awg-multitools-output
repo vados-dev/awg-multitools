@@ -319,9 +319,9 @@ wg_header() {
     printf '\n\n'
     local logo1=' _       ___                                      __    '
     local logo2='| |     / (_)_______  ____ ___  ______ __________/ /    '
-    local logo3='| | /| / / / ___/ _ \/ __  / / / / __  / ___/ __  /     '
-    local logo4='|/ |/ / / /  /  __/ /_/ / /_/ / /_/ / /  / /_/ / /      '
-    local logo5='|__/|__/_/_/   \___/\__  /\__ _/\__ _/_/   \__ _/       '
+    local logo3='| | /| / / / ___/ _ \/ __ `/ / / / __ `/ ___/ __  /     '
+    local logo4='| |/ |/ / / /  /  __/ /_/ / /_/ / /_/ / /  / /_/ /      '
+    local logo5='|__/|__/_/_/   \___/\__, /\__,_/\__,_/_/   \__,_/       '
     local logo6='                   /____/                               '
     printf "$(cecho sM %s)\n" "$(align::right $TERM_COLS "$logo1")"
     printf "$(cecho sM %s)\n" "$(align::right $TERM_COLS "$logo2")"
@@ -329,7 +329,7 @@ wg_header() {
     printf "$(cecho sM %s)\n" "$(align::right $TERM_COLS "$logo4")"
     printf "$(cecho sM %s)\n" "$(align::right $TERM_COLS "$logo5")"
     printf "$(cecho sM %s)\n" "$(align::right $TERM_COLS "$logo6")"
-    printf "$(cecho sW %s)\n\n" "$(align::right $TERM_COLS "$pr_descr    ")"
+    printf "$(cecho Bs %s)\n\n" "$(align::right $TERM_COLS "$pr_descr    ")"
     printf "%s\n\n" "$(align::right $((${TERM_COLS} + 31)) " ${sym_star} $(cecho sM "${pr_slogan}") ${sym_star}     ")"
 }
 
@@ -413,11 +413,12 @@ select_menu() {
             index=$((index + 1))
         done
         _read_choice choice
+        printf "${bnc}"
 
         [[ "$choice" == "0" ]] && log_cancel; return 1
 
-        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#sActions[@]} )); then
-            "${sActions[choice - 1]}"
+        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#sArr[@]} )); then
+            "${sArr[choice - 1]}"
                 return 0
         else
             local enterReturn="$(cecho sM "Для отмены введите \"")$(cecho sY "0")$(cecho sM "\".")"
@@ -640,7 +641,6 @@ function multiselect_43m {
         [[ ${msDefaults[i]} = "true" ]] && selected+=("true") || selected+=("false")
         printf "\n"
     done
-
 
     multi_legend "$help_flag"
 

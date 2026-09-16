@@ -1,0 +1,34 @@
+#-> Возможные значения:
+# quick, tls, dtls, sip, dns, noise
+AWG3_PROFILE="dns"
+AWG3_INTENSITY="medium"
+AWG3_ROUTER_MODE=0
+AWG3_ENDPOINT_OVERRIDE=""
+AWG3_CLIENT_DNS="10.31.31.1, 8.8.4.4, 1.0.0.1"
+AWG3_CLIENT_ALLOWED_IPS="0.0.0.0/0, ::/0"
+# Задан ли список явно флагом: если да, он уважается как есть, даже когда IPv6-маршруты клиенту не нужны.
+AWG3_CLIENT_ALLOWED_IPS_EXPLICIT=0
+AWG3_MTU_OVERRIDE=""
+AWG3_MAKE_QR=1
+AWG3_MAKE_LINK=1
+AWG3_DO_APPLY=1
+AWG3_PRUNE_KEEP="5"
+
+AWG3_DEFAULT_ADDRESS="10.31.31.1/24"
+AWG3_DEFAULT_ALLOWED_IPS="0.0.0.0/0"
+AWG3_DEFAULT_DNS="10.30.30.33, 8.8.4.4"
+
+AWG3_SRV_FW_POLICY="GW-VPN-to-world"
+AWG3_SRV_FW_SERVICE="VPN-awg3vpn-ports"
+AWG3_SRV_FW_ZONE="VPN-awg3vpn"
+
+# Параметры server-init. Пустой AWG3_SRV_PORT означает «выбрать случайный»:
+# предсказуемый порт сам по себе является признаком.
+AWG3_SRV_IFACE="awg3vds"
+AWG3_SRV_PORT="31031"
+AWG3_SRV_SUBNET="10.31.31.1/24"
+AWG3_SRV_MTU="1420"
+AWG3_SRV_ISOLATION="off"
+AWG3_SRV_IPV6="off"
+AWG3_SRV_IPV6_SUBNET="fddd:2c4:2c4:2c4::/64"
+AWG3_SRV_FORCE=0

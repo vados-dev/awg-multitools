@@ -3,8 +3,19 @@
 
 source ./.awg-multitools-env
 source ./.awg-multitools-colors
-source ./.awg-multitools-functions
 source ./.awg-multitools-output
+source ./.awg-multitools-input
+source ./.awg-multitools-functions
+
+
+declare sItems=("one" "two" "three")
+declare sArr=("sel_one" "sel_two" "sel_three")
+declare sDefault="2"
+declare sTitle="test Select menu"
+select_menu
+echo $sArr
+
+exit 0
 
 _list=("one" "two" "three")
 

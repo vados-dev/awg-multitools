@@ -139,32 +139,32 @@ awg3_backup_file() {
 ########################
 awg3_restart() {
     local rc=0
-    systemctl restart "awg-quick@${AWG3_IFACE}" 2>/dev/null || rc=$?
-    [[ $rc -eq 0 ]] && success_box "Cервис перезапущен." || failure_box "Ошибка перезапуска сервиса, подробности: \"systemctl status awg-quick@${AWG3_IFACE}\"!"
+    systemctl restart "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || rc=$?
+    [[ $rc -eq 0 ]] && success_box "Cервис перезапущен." || failure_box "Ошибка перезапуска сервиса, подробности: \"systemctl status awg-quick@${AWG3_SRV_IFACE}\"!"
     return $rc
 }
 awg3_start() {
     local rc=0
-    systemctl start "awg-quick@${AWG3_IFACE}" 2>/dev/null || rc=$?
-    [[ $rc -eq 0 ]] && success_box "Cервис запущен." || failure_box "Ошибка запуска сервиса, подробности: \"systemctl status awg-quick@${AWG3_IFACE}\"!"
+    systemctl start "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || rc=$?
+    [[ $rc -eq 0 ]] && success_box "Cервис запущен." || failure_box "Ошибка запуска сервиса, подробности: \"systemctl status awg-quick@${AWG3_SRV_IFACE}\"!"
     return $rc
 }
 awg3_stop() {
     local rc=0
-    systemctl stop "awg-quick@${AWG3_IFACE}" 2>/dev/null || rc=$?
-    [[ $rc -eq 0 ]] && success_box "Cервис остановлен." || failure_box "Ошибка остановки сервиса, подробности: \"systemctl status awg-quick@${AWG3_IFACE}\"!"
+    systemctl stop "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || rc=$?
+    [[ $rc -eq 0 ]] && success_box "Cервис остановлен." || failure_box "Ошибка остановки сервиса, подробности: \"systemctl status awg-quick@${AWG3_SRV_IFACE}\"!"
     return $rc
 }
 awg3_enable() {
     local rc=0
-    systemctl enable --now "awg-quick@${AWG3_IFACE}" 2>/dev/null || rc=$?
-    [[ $rc -eq 0 ]] && success_box "Cервис включён и запущен." || failure_box "Ошибка включения сервиса, подробности: \"systemctl status awg-quick@${AWG3_IFACE}\"!"
+    systemctl enable --now "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || rc=$?
+    [[ $rc -eq 0 ]] && success_box "Cервис включён и запущен." || failure_box "Ошибка включения сервиса, подробности: \"systemctl status awg-quick@${AWG3_SRV_IFACE}\"!"
     return $rc
 }
 awg3_disable() {
     local rc=0
-    systemctl disable --now "awg-quick@${AWG3_IFACE}" 2>/dev/null || rc=$?
-    [[ $rc -eq 0 ]] && success_box "Cервис выключен и остановлен." || failure_box "Ошибка выключения сервиса, подробности: \"systemctl status awg-quick@${AWG3_IFACE}\"!"
+    systemctl disable --now "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || rc=$?
+    [[ $rc -eq 0 ]] && success_box "Cервис выключен и остановлен." || failure_box "Ошибка выключения сервиса, подробности: \"systemctl status awg-quick@${AWG3_SRV_IFACE}\"!"
     return $rc
 }
 
@@ -182,13 +182,13 @@ apply_peers() {
         return 1
     fi
     local strip_out rc=0
-    if strip_out=$(timeout 10 awg-quick strip "$AWG3_IFACE" 2>/dev/null) \
-       && printf '%s\n' "$strip_out" | timeout 10 awg syncconf "$AWG3_IFACE" /dev/stdin 2>/dev/null; then
+    if strip_out=$(timeout 10 awg-quick strip "$AWG3_SRV_IFACE" 2>/dev/null) \
+       && printf '%s\n' "$strip_out" | timeout 10 awg syncconf "$AWG3_SRV_IFACE" /dev/stdin 2>/dev/null; then
         log_ok "Конфигурация применена (syncconf)."
     else
         log_warn "syncconf не сработал, перезапускаю сервис."
-        systemctl restart "awg-quick@${AWG3_IFACE}" 2>/dev/null || rc=$?
-        [[ $rc -eq 0 ]] && log_ok "Cервис перезапущен." || log_warn "Ошибка перезапуска сервиса, подробности: \"systemctl status awg-quick@${AWG3_IFACE}\"!"
+        systemctl restart "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || rc=$?
+        [[ $rc -eq 0 ]] && log_ok "Cервис перезапущен." || log_warn "Ошибка перезапуска сервиса, подробности: \"systemctl status awg-quick@${AWG3_SRV_IFACE}\"!"
     fi
     exec {fd}>&-
     return $rc
@@ -350,7 +350,7 @@ awg3_server_init() {
     ROLLBACK_ACTIVE=0
     trap - EXIT
     if [[ "$AWG3_DO_APPLY" -eq 1 ]]; then
-        systemctl enable --now "awg-quick@${AWG3_IFACE}" 2>/dev/null || log_warn "Сервис не запустился, смотрите: systemctl status \"awg-quick@${AWG3_IFACE}.service\"."
+        systemctl enable --now "awg-quick@${AWG3_SRV_IFACE}" 2>/dev/null || log_warn "Сервис не запустился, смотрите: systemctl status \"awg-quick@${AWG3_SRV_IFACE}.service\"."
     fi
     log_ok "Сервер AWG ${AWG3_PROTOCOL} создан: ${AWG3_SYSCONF}."
     log_ok "Порт: ${AWG3_SRV_PORT}/udp, подсеть: ${AWG3_SRV_SUBNET}, MTU: ${AWG3_SRV_MTU}."
@@ -545,8 +545,8 @@ awg3_preflight() {
     # Повторный запуск не должен менять порт: клиенты уже раздали конфиги с прежним значением, и смена порта тихо оборвала бы их всех.
     if [[ -r "$AWG3_RESERVED_ENV" ]]; then
             local prev_port prev_subnet
-            prev_port="$(awk -F= '/^AWG3_PORT=/{print $2}' "$AWG3_RESERVED_ENV")"
-            prev_subnet="$(awk -F= '/^AWG3_SUBNET=/{print $2}' "$AWG3_RESERVED_ENV")"
+            prev_port="$(awk -F= '/^AWG3_SRV_PORT=/{print $2}' "$AWG3_RESERVED_ENV")"
+            prev_subnet="$(awk -F= '/^AWG3_SRV_SUBNET=/{print $2}' "$AWG3_RESERVED_ENV")"
             log "Переустановка: сохраняю прежний резерв."
             log "Порт ${prev_port}, подсеть ${prev_subnet}."
             log "Сбросить резерв: rm ${AWG3_RESERVED_ENV}."
@@ -568,19 +568,19 @@ awg3_preflight() {
         log "Именно поэтому AWG3 не пользуется awg-quick: при модуле он поднял бы."
         log "Kernel-интерфейс вместо нашего userspace-демона."
     fi
-    if [[ "$AWG3_PORT" == "" ]]; then
-        AWG3_PORT="$(pick_port "$awg2_port")"
-        validate_port "$AWG3_PORT" || exit 1
+    if [[ "$AWG3_SRV_PORT" == "" ]]; then
+        AWG3_SRV_PORT="$(pick_port "$awg2_port")"
+        validate_port "$AWG3_SRV_PORT" || exit 1
     fi
-    if [[ "$AWG3_SUBNET" == "" ]]; then
-        AWG3_SUBNET="$(pick_subnet "$awg2_net")"
+    if [[ "$AWG3_SRV_SUBNET" == "" ]]; then
+        AWG3_SRV_SUBNET="$(pick_subnet "$awg2_net")"
     fi
     mkdir -p "$AWG3_CONFIGS"; chmod 700 "$AWG3_CONFIGS"
     cat >"$AWG3_RESERVED_ENV" <<EOF
 # Зарезервировано установщиком AWG3 $(date -Is).
 # Проверено на непересечение с AWG 2.0 на момент установки.
-AWG3_PORT=${AWG3_PORT}
-AWG3_IFACE=${AWG3_IF}
+AWG3_SRV_PORT=${AWG3_SRV_PORT}
+AWG3_SRV_IFACE=${AWG3_SRV_IFACE}
 AWG3_ROUTE_TABLE=${AWG3_ROUTE_TABLE}
 AWG2_PORT_SEEN=${awg2_port:-none}
 AWG2_SUBNET_SEEN=${awg2_net:-none}
@@ -593,15 +593,15 @@ EOF
 awg3_edit_default_env() {
     print_section "Параметры сервера AmneziaWG 3"
     if [[ -r "$AWG3_DEFAULT_ENV" ]]; then
-        ask_yn "  ${byel}Переделываем $AWG3_DEFAULT_ENV? ${bnc}" "y" new_def_env
-        if [[ "$new_def_env" == "yes" ]]; then
-            print_delete "Переустановка: удаляю прежний $AWG3_DEFAULT_ENV."
-            rm -f "$AWG3_DEFAULT_ENV" || true
-            log "Пишем новый $AWG3_DEFAULT_ENV."
-        fi
-    else
-        log "Файл резерва переменных окружения $AWG3_RESERVED_ENV не найден. Просто создаём новый."
-        awg3_add_reserv
+        ask_force "Переделываем ${AWG3_DEFAULT_ENV}?" || return 1
+        log "Сначала бэкап..."
+        awg3_backup || { failure_box log_error "Бэкап не сделан, отмена!"; return 1; }
+        print_delete "Переустановка: удаляю прежний ${AWG3_DEFAULT_ENV}."
+        rm -f "$AWG3_DEFAULT_ENV" || true
+        log "Пишем новый $AWG3_DEFAULT_ENV."
+#    else
+#        log "Файл резерва переменных окружения $AWG3_RESERVED_ENV не найден. Просто создаём новый."
+#        awg3_add_reserv
     fi
     local existing_subnets=""
     while IFS= read -r line; do
@@ -612,44 +612,41 @@ awg3_edit_default_env() {
 
     local def_endpoint_ip=${ipext}
     while true; do
-        echo -e "  ${bnc}IP по которому клиенты подключаются к серверу."
-        echo -e "  ${bnc}Если определён верно, просто нажми Enter."
-        ask "Внешний IP (ENDPOINT): " "$def_endpoint_ip" AWG3_NEW_ENDPOINT
+        printstr "IP по которому клиенты подключаются к серверу."
+        printstr "Если определён верно, просто нажмите Enter."
+        ask "Внешний IP (ENDPOINT)" "$def_endpoint_ip" AWG3_NEW_ENDPOINT
         validate_ip "$AWG3_NEW_ENDPOINT" && break
-        log_error "Некорректный IP!"
+        log_warn "Некорректный IP!"
     done
-    print_ok "Внешний IP: ${AWG3_NEW_ENDPOINT}"
+    log_ok "Внешний IP: ${AWG3_NEW_ENDPOINT}"
 
-    local def_port=${AWG3_PORT}
+    local def_port="${AWG3_DEFAULT_PORT}"
     while true; do
-        echo -e "  ${bld}UDP порт AmneziaWG. Дефолт $def_port, можно любой свободный."
-        ask "UDP порт: " "$def_port" AWG3_NEW_PORT
-        if ! validate_port "$AWG3_NEW_PORT"; then print_err "Порт 1-65535"; continue; fi
-        if ss -H -uln 2>/dev/null | grep -Eq "[:.]${AWG3_NEW_PORT}[[:space:]]"; then
-            print_warn "Порт ${AWG3_NEW_PORT} уже занят"; continue
-        fi
+        printstr "UDP порт AmneziaWG. По умолчанию: [$def_port], можно любой свободный."
+        ask "UDP порт" "$def_port" AWG3_NEW_PORT
+        validate_port "$AWG3_NEW_PORT" > /dev/null 2>&1 || { log_warn "Порт 1-65535"; continue; }
+        ! ss -H -uln 2>/dev/null | grep -Eq "[:.]${AWG3_NEW_PORT}[[:space:]]" > /dev/null 2>&1 || { log_warn "Порт ${AWG3_NEW_PORT} уже занят."; continue; }
         break
     done
-    print_ok "Порт: ${AWG3_NEW_PORT}"
+    log_ok "Порт: ${AWG3_NEW_PORT}"
 
-    # - интерфейс туннеля -
-    local def_iface=${AWG3_IF}
+    #-> Интерфейс туннеля:
+    local def_iface="${AWG3_DEFAULT_IFACE}"
     while true; do
-        echo -e "  ${bnc}Интерфейс AmneziaWG. Дефолт ${bmag}${def_iface}${bnc}."
-        ask "Имя интерфейса" "$def_iface" AWG3_NEW_IF
-        if ! validate_tunnel_iface "$AWG3_NEW_IF"; then log_error "$AWG3_NEW_IF"; continue; fi
+        printstr "Интерфейс AmneziaWG. По умолчанию: ${def_iface}."
+        ask "Имя интерфейса" "$def_iface" AWG3_NEW_IFACE
+        ! validate_tunnel_iface "${AWG3_NEW_IFACE}" > /dev/null 2>&1 || { log_warn "${AWG3_NEW_IFACE}"; continue; }
         break
     done
-    print_ok "Интерфейс: ${AWG3_NEW_IF}"
+    log_ok "Интерфейс: ${AWG3_NEW_IFACE}"
 
-    # - подсеть туннеля -
-    local def_subnet=${AWG3_SUBNET}
+    #-> Подсеть туннеля:
+    local def_subnet="${AWG3_DEFAULT_SUBNET}"
     while true; do
-        echo ""
-        log "Подсети на интерфейсах сервера: ${existing_subnets}."
-        log_warn "${byel}Убедись что подсеть не совпадает с домашней сетью клиента (роутер, гостевой WiFi). Иначе VPN работать не будет."
-        ask "Подсеть туннеля: " "$def_subnet" AWG3_NEW_SUBNET
-        if ! validate_cidr "$AWG3_NEW_SUBNET"; then log_error "Формат: 10.10.10.0/24"; continue; fi
+        printstr "Подсети на интерфейсах сервера: ${existing_subnets}."
+        log_warn "Убедитесь что подсеть не совпадает с домашней сетью клиента (роутер, гостевой WiFi). Иначе VPN работать не будет."
+        ask "Подсеть туннеля" "$def_subnet" AWG3_NEW_SUBNET
+        validate_cidr "${AWG3_NEW_SUBNET}" > /dev/null 2>&1 || { log_error "Формат: 10.10.10.0/24"; continue; }
         local tunnel_base=$(cidr_base "$AWG3_NEW_SUBNET")
         # - subnets_overlap() заточен под 10.X.0.0/24, этого достаточно для схемы AWG -
         if subnets_overlap "$tunnel_base" "$existing_subnets"; then
@@ -657,15 +654,13 @@ awg3_edit_default_env() {
             log "Попробуйте: 10.3.3.0/24 или 10.33.33.0/24"
             continue
         fi
-        # - предупреждение о типичных домашних подсетях -
+        #-> Предупреждение о типичных домашних подсетях:
         local _home_conflict=false
         for _hs in 192.168.0 192.168.1 192.168.100 10.0.0 10.0.1 10.10.0; do
             if [[ "$tunnel_base" == "$_hs" ]]; then
-                echo ""
-                print_warn "Подсеть ${AWG3_NEW_SUBNET} очень распространена на домашних роутерах!"
-                print_warn "Если у клиента дома роутер раздаёт ${AWG3_NEW_SUBNET},"
-                print_warn "VPN работать не будет (конфликт маршрутов)!"
-                echo ""
+                printstr "Подсеть ${AWG3_NEW_SUBNET} очень распространена на домашних роутерах!"
+                printstr "Если у клиента дома роутер раздаёт ${AWG3_NEW_SUBNET},"
+                printstr "VPN работать не будет (конфликт маршрутов)!"
                 local _hc=""
                 ask_yn "Всё равно использовать?" "n" _hc
                 [[ "$_hc" != "yes" ]] && { _home_conflict=true; break; }
@@ -678,73 +673,65 @@ awg3_edit_default_env() {
     local tunnel_base
     tunnel_base=$(cidr_base "$AWG3_NEW_SUBNET")
     AWG3_NEW_ADDRESS="${tunnel_base}.1"
-    print_ok "Подсеть: ${AWG3_NEW_SUBNET}, IP сервера: ${AWG3_NEW_ADDRESS}"
+    log_ok "Подсеть: ${AWG3_NEW_SUBNET}, IP сервера: ${AWG3_NEW_ADDRESS}"
 
-    # - DNS -
-    local def_dns="10.30.30.33, 8.8.4.4"
-    echo ""
-    echo -e "  ${bnc}DNS для клиентов:"
+    #-> DNS:
+    local def_dns="${AWG3_DEFAULT_DNS}"
+    printstr "DNS для клиентов:"
+    select_dns() {
+        local _resolver="$1"
+        echo -e "  $(cecho Ws "1) $_resolver (IP туннеля): ${AWG3_NEW_ADDRESS}")"
+        echo -e "  $(cecho Ms '2')$(cecho Ws ") Предустановленные: ${def_dns}")"
+        echo -e "  $(cecho Ws "3) Все: ${AWG3_NEW_ADDRESS}, ${def_dns}")"
+        while true; do
+            ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[2]\033[1m:\033[0m ')" AWG3_NEW_DNS "$def_dns" -
+            case "${AWG3_NEW_DNS:-2}" in
+                1) AWG3_NEW_DNS="${AWG3_NEW_ADDRESS}"; break ;;
+                2) AWG3_NEW_DNS="${def_dns}"; break ;;
+                3) AWG3_NEW_DNS="${AWG3_NEW_ADDRESS}, ${def_dns}"; break ;;
+                *) AWG3_NEW_DNS="${def_dns}"; break ;;
+            esac
+        done
+    }
     if systemctl is-active --quiet unbound 2>/dev/null; then
-        echo -e "  ${bnc}1) Unbound (IP туннеля): ${AWG3_NEW_ADDRESS}"
-        echo -e "  ${bmag}2${bnc}) Предустановленные: ${def_dns}${nc}"
-        echo ""
-        while true; do
-            ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[2]\033[1m:\033[0m ')" AWG3_NEW_DNS "$def_dns" -
-            case "${AWG3_NEW_DNS:-2}" in
-                1) AWG3_NEW_DNS="${AWG3_NEW_ADDRESS}"; break ;;
-                2) AWG3_NEW_DNS="${def_dns}"; break ;;
-                *) AWG3_NEW_DNS="${def_dns}"; break ;;
-            esac
-        done
+        select_dns "Unbound"
     elif systemctl is-active --quiet named 2>/dev/null; then
-        echo -e "  ${bnc}1) Named (IP туннеля): ${AWG3_NEW_ADDRESS}"
-        echo -e "  ${bmag}2${bnc}) Предустановленные: ${def_dns}${nc}"
-        echo ""
-        while true; do
-            ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[2]\033[1m:\033[0m ')" AWG3_NEW_DNS "$def_dns" -
-            case "${AWG3_NEW_DNS:-2}" in
-                1) AWG3_NEW_DNS="${AWG3_NEW_ADDRESS}"; break ;;
-                2) AWG3_NEW_DNS="${def_dns}"; break ;;
-                *) AWG3_NEW_DNS="${def_dns}"; break ;;
-            esac
-        done
+        select_dns "Named"
     else
-        log "Unbound или named не запущены, дефолт: ${AWG3_NEW_DNS}"
+        log "Unbound или named не запущены, по умолчанию: ${AWG3_DEFAULT_DNS}"
+        AWG3_NEW_DNS="${def_dns}"
     fi
     print_ok "DNS: ${AWG3_NEW_DNS}"
 
-    # - AllowedIPs -
-    local def_allowed="0.0.0.0/0"
+    #-> AllowedIPs:
+    local def_allowed="${AWG3_DEFAULT_ALLOWED_IPS}"
     local kill_switch="0.0.0.0/1, 128.0.0.0/1"
-    echo ""
-    echo -e "  ${bnc}Маршрутизация трафика:"
-    echo -e "  ${bmag}1${bnc}) ${def_allowed} (весь трафик через VPN)"
-    echo -e "  ${bnc}2) ${kill_switch} (kill switch)"
-    echo -e "  ${bnc}3) ${AWG3_NEW_SUBNET} (только туннель)"
-    echo -e "  ${bnc}4) Ввести вручную${nc}"
-    echo ""
+    printstr "Маршрутизация трафика:"
+    echo -e "  $(cecho Ms '1')$(cecho Ws ") ${def_allowed} (весь трафик через VPN)")"
+    echo -e "  $(cecho Ws "2) ${kill_switch} (kill switch)")"
+    echo -e "  $(cecho Ws "3) ${AWG3_NEW_SUBNET} (только туннель)")"
+    echo -e "  $(cecho Ws "4) Ввести вручную")"
     while true; do
-        ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_ALLOWED "$def_allowed" -
-        case "${rt_ch:-1}" in
-            1) AWG3_NEW_ALLOWED="$def_allowed"; break ;;
-            2) AWG3_NEW_ALLOWED="$kill_switch"; break ;;
-            3) AWG3_NEW_ALLOWED="$AWG3_NEW_SUBNET"; break ;;
-            4) ask "AllowedIPs" $def_allowed AWG3_NEW_ALLOWED; break ;;
-            *) AWG3_NEW_ALLOWED="$def_allowed"; break ;;
+        ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_ALLOWED_IPS "$def_allowed" -
+        case "${AWG3_NEW_ALLOWED_IPS:-1}" in
+            1) AWG3_NEW_ALLOWED_IPS="$def_allowed"; break ;;
+            2) AWG3_NEW_ALLOWED_IPS="$kill_switch"; break ;;
+            3) AWG3_NEW_ALLOWED_IPS="$AWG3_NEW_SUBNET"; break ;;
+            4) ask "AllowedIPs" "$def_allowed" AWG3_NEW_ALLOWED_IPS; break ;;
+            *) AWG3_NEW_ALLOWED_IPS="$def_allowed"; break ;;
         esac
     done
-    print_ok "AllowedIPs: ${AWG3_NEW_ALLOWED}"
+    log_ok "AllowedIPs: ${AWG3_NEW_ALLOWED_IPS}"
 
-    # -- MTU ТУННЕЛЯ --
-    local def_mtu="1320"
-    echo ""
-    echo -e "  ${bnc}MTU туннеля:"
-    echo -e "  ${bnc}1) 1280 - максимальная совместимость (мобильные сети, GTP)"
-    echo -e "  ${bnc}2) 1300 - баланс и совместимость"
-    echo -e "  ${bmag}3${bnc}) 1320 - баланс (рекомендуется 'ЭТО БАЗА')"
-    echo -e "  ${bnc}4) 1360 - баланс и скорость"
-    echo -e "  ${bnc}5) 1420 - максимальная скорость (чистый Ethernet)"
-    echo -e "  ${bnc}6) Ввести вручную"${nc}
+    #-> MTU туннеля:
+    local def_mtu="${AWG3_DEFAULT_MTU}"
+    printstr "MTU туннеля:"
+    echo -e "  $(cecho Ws "1) 1280 - максимальная совместимость (мобильные сети, GTP)")"
+    echo -e "  $(cecho Ws "2) 1300 - баланс и совместимость")"
+    echo -e "  $(cecho Ms '3')$(cecho Ws ") 1320 - баланс (рекомендуется 'ЭТО БАЗА')")"
+    echo -e "  $(cecho Ws "4) 1360 - баланс и скорость")"
+    echo -e "  $(cecho Ws "5) 1420 - максимальная скорость (чистый Ethernet)")"
+    echo -e "  $(cecho Ws "6) Ввести вручную")"
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[3]\033[1m:\033[0m ')" AWG3_NEW_MTU "$def_mtu" -
         case "${AWG3_NEW_MTU:-3}" in
@@ -753,101 +740,102 @@ awg3_edit_default_env() {
             3) AWG3_NEW_MTU="1320"; break ;;
             4) AWG3_NEW_MTU="1360"; break ;;
             5) AWG3_NEW_MTU="1420"; break ;;
-            6) ask "MTU" $def_mtu AWG3_NEW_MTU; break ;;
+            6) ask "MTU" "$def_mtu" AWG3_NEW_MTU; break ;;
             *) AWG3_NEW_MTU="$def_mtu"; break ;;
         esac
     done
     log_ok "MTU: ${AWG3_NEW_MTU}"
 
-    # - Firewalld Policy -
-    local def_fw_policy=${AWG3_FW_POLICY}
-    echo ""
-    echo -e "  ${bnc}Имя firewalld policy:"
-    echo -e "  ${bmag}1${bnc}) ${def_fw_policy} (туннель в Интернет)"
-    echo -e "  ${bnc}2) Ввести вручную${nc}"
-    echo ""
+    #-> Firewalld Policy:
+    local def_fw_policy=${AWG3_DEFAULT_FW_POLICY}
+    printstr "Имя firewalld policy:"
+    echo -e "  $(cecho Ms '1')$(cecho Ws ") ${def_fw_policy} (туннель в Интернет)")"
+    echo -e "  $(cecho Ws "2) Ввести вручную")"
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_FW_POLICY "$def_fw_policy" -
         case "${AWG3_NEW_FW_POLICY:-1}" in
             1) AWG3_NEW_FW_POLICY="$def_fw_policy"; break ;;
-            2) ask "Имя firewalld policy: " $def_fw_policy AWG3_NEW_FW_POLICY; break ;;
+            2) ask "Имя firewalld policy" "$def_fw_policy" AWG3_NEW_FW_POLICY; break ;;
             *) AWG3_NEW_FW_POLICY="$def_fw_policy"; break ;;
         esac
     done
-    print_ok "Имя firewalld policy: ${AWG3_NEW_FW_POLICY}"
+    log_ok "Имя firewalld policy: ${AWG3_NEW_FW_POLICY}"
 
-    # - Firewalld Service -
-    local def_fw_service=${AWG3_FW_SERVICE}
-    echo ""
-    echo -e "  ${bnc}Имя firewalld service:"
-    echo -e "  ${bmag}1${bnc}) ${def_fw_service}"
-    echo -e "  ${bnc}2) Ввести вручную${nc}"
-    echo ""
+    #-> Firewalld Service:
+    local def_fw_service=${AWG3_DEFAULT_FW_SERVICE}
+    printstr "Имя firewalld service:"
+    echo -e "  $(cecho Ws '1')$(cecho Ws ") ${def_fw_service}")"
+    echo -e "  $(cecho Ws "2) Ввести вручную")"
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_FW_SERVICE "$def_fw_service" -
         case "${AWG3_NEW_FW_SERVICE:-1}" in
             1) AWG3_NEW_FW_SERVICE="$def_fw_service"; break ;;
-            2) ask "Имя firewalld service: " $def_fw_service AWG3_NEW_FW_SERVICE; break ;;
+            2) ask "Имя firewalld service" "$def_fw_service" AWG3_NEW_FW_SERVICE; break ;;
             *) AWG3_NEW_FW_SERVICE="$def_fw_service"; break ;;
         esac
     done
-    print_ok "Имя firewalld service: ${AWG3_NEW_FW_SERVICE}"
+    log_ok "Имя firewalld service: ${AWG3_NEW_FW_SERVICE}"
 
-    # - Firewalld Zone -
-    local def_fw_zone=${AWG3_FW_ZONE}
-    echo ""
-    echo -e "  ${bnc}Имя firewalld zone:"
-    echo -e "  ${bmag}1${bnc}) ${def_fw_zone}"
-    echo -e "  ${bnc}2) Ввести вручную${nc}"
-    echo ""
+    #-> Firewalld Zone:
+    local def_fw_zone=${AWG3_DEFAULT_FW_ZONE}
+    printstr "Имя firewalld zone:"
+    echo -e "  $(cecho Ms '1')$(cecho Ws ") ${def_fw_zone}")"
+    echo -e "  $(cecho Ws "2) Ввести вручную")"
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_FW_ZONE "$def_fw_zone" -
         case "${AWG3_NEW_FW_ZONE:-1}" in
             1) AWG3_NEW_FW_ZONE="$def_fw_zone"; break ;;
-            2) ask "Имя firewalld zone: " $def_fw_zone AWG3_NEW_FW_ZONE; break ;;
+            2) ask "Имя firewalld zone" "$def_fw_zone" AWG3_NEW_FW_ZONE; break ;;
             *) AWG3_NEW_FW_ZONE="$def_fw_zone"; break ;;
         esac
     done
-    print_ok "Имя firewalld zone: ${AWG3_NEW_FW_ZONE}"
+    log_ok "Имя firewalld zone: ${AWG3_NEW_FW_ZONE}"
 
-    local force_create_reserv
-    [[ "$AWG3_NEW_ENDPOINT" != "$AWG3_ENDPOINT" ]] && AWG3_ENDPOINT="$AWG3_NEW_ENDPOINT" || true
-    [[ "$AWG3_NEW_PORT" != "$AWG3_PORT" ]] && AWG3_PORT="$AWG3_NEW_PORT" || true
-    [[ "$AWG3_NEW_IF" != "$AWG3_IF" ]] && AWG3_IF="$AWG3_NEW_IF" || true
-    [[ "$AWG3_NEW_SUBNET" != "$AWG3_SUBNET" ]] && AWG3_SUBNET="$AWG3_NEW_SUBNET" || true
-    [[ "$AWG3_NEW_ADDRESS" != "$AWG3_ADDRESS" ]] && AWG3_ADDRESS="$AWG3_NEW_ADDRESS" || true
-    [[ "$AWG3_NEW_DNS" != "$AWG3_DNS" ]] && AWG3_DNS="$AWG3_NEW_DNS" || true
-    [[ "$AWG3_NEW_ALLOWED" != "$AWG3_ALLOWED" ]] && AWG3_ALLOWED="$AWG3_NEW_ALLOWED" || true
-    [[ "$AWG3_NEW_MTU" != "$AWG3_MTU" ]] && AWG3_MTU="$AWG3_NEW_MTU" || true
-    [[ "$AWG3_NEW_FW_POLICY" != "$AWG3_FW_POLICY" ]] && AWG3_FW_POLICY="$AWG3_NEW_FW_POLICY" || true
-    [[ "$AWG3_NEW_FW_SERVICE" != "$AWG3_FW_SERVICE" ]] && AWG3_FW_SERVICE="$AWG3_NEW_FW_SERVICE" || true
-    [[ "$AWG3_NEW_FW_ZONE" != "$AWG3_FW_ZONE" ]] && AWG3_FW_ZONE="$AWG3_NEW_FW_ZONE" || true
-#    if [[ "$AWG3_PORT" == "" ]]; then
-#        AWG3_PORT="$(pick_port "$awg2_port")"
-#        validate_port "$AWG3_PORT" || exit 1
-#    fi
-#    if [[ "$AWG3_SUBNET" == "" ]]; then
-#        AWG3_SUBNET="$(pick_subnet "$awg2_net")"
-#    fi
-    AWG3_DEFAULT_ENV=${AWG3_DEFAULT_ENV_DIR}/${AWG3_IF:-$AWG3_IFACE}.env
     cat >"${AWG3_DEFAULT_ENV}" <<EOF
-# Зарезервировано установщиком AWG3 $(date -Is).
-# Проверено на непересечение с AWG 2.0 на момент установки.
-AWG3_PORT=${AWG3_PORT}
-AWG3_IFACE=${AWG3_IF}
-AWG3_ENDPOINT=${AWG3_ENDPOINT}
-AWG3_SUBNET=${AWG3_SUBNET}
-AWG3_ADDRESS=${AWG3_ADDRESS}/24
-AWG3_DNS=${AWG3_DNS}
-AWG3_ALLOWED_IPS=${AWG3_ALLOWED_IPS}
-AWG3_MTU=${AWG3_MTU}
-AWG3_FW_POLICY=${AWG3_FW_POLICY}
-AWG3_FW_SERVICE=${AWG3_FW_SERVICE}
-AWG3_FW_ZONE=${AWG3_FW_ZONE}
+### Параметры генерации:
+########################
+#-> Возможные значения:
+# quick, tls, dtls, sip, dns, noise
+AWG3_PROFILE="dns"
+AWG3_INTENSITY="medium"
+AWG3_ROUTER_MODE=0
+
+### Параметры клиентов:
+#######################
+AWG3_ENDPOINT="${AWG3_NEW_ENDPOINT}"
+AWG3_ENDPOINT_OVERRIDE=""
+AWG3_CLIENT_DNS="${AWG3_NEW_DNS}"
+AWG3_CLIENT_ALLOWED_IPS="${AWG3_NEW_ALLOWED_IPS}"
+#-> Задан ли список явно флагом: если да, он уважается как есть, даже когда IPv6-маршруты клиенту не нужны.
+AWG3_CLIENT_ALLOWED_IPS_EXPLICIT=0
+AWG3_MTU_OVERRIDE=""
+AWG3_MAKE_QR=1
+AWG3_MAKE_LINK=1
+AWG3_DO_APPLY=1
+AWG3_PRUNE_KEEP="5"
+
+### Параметры файрвола:
+#######################
+AWG3_SRV_FW_POLICY="${AWG3_NEW_FW_POLICY}"
+AWG3_SRV_FW_SERVICE="${AWG3_NEW_FW_SERVICE}"
+AWG3_SRV_FW_ZONE="${AWG3_NEW_FW_ZONE}"
+
+### Параметры awg3_server_init:
+###############################
+#-> Значение 1 будет заставлять игнорировать имеющийся конфиг сервера
+AWG3_SRV_FORCE=0
+AWG3_SRV_IFACE="${AWG3_NEW_IFACE}"
+#-> Пустой AWG3_SRV_PORT означает «выбрать случайный»: предсказуемый порт сам по себе является признаком.
+AWG3_SRV_PORT="${AWG3_NEW_PORT}"
+AWG3_SRV_SUBNET="${AWG3_NEW_SUBNET}"
+AWG3_SRV_ADDRESS="${AWG3_NEW_ADDRESS}/24"
+AWG3_SRV_MTU="${AWG3_NEW_MTU}"
+AWG3_SRV_ISOLATION="off"
+AWG3_SRV_IPV6="off"
+AWG3_SRV_IPV6_SUBNET="fddd:2c4:2c4:2c4::/64"
 EOF
     chmod 600 "$AWG3_DEFAULT_ENV"
-    log_ok "Зарезервировано: порт ${AWG3_PORT}, подсеть ${AWG3_SUBNET}/24, policy ${AWG3_FW_POLICY}."
-    log "Записано в ${AWG3_DEFAULT_ENV}."
+    success_box "Записано в ${AWG3_DEFAULT_ENV}."
 }
 
 remove_awg3_fw_policy() {
