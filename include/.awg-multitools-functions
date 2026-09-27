@@ -49,22 +49,20 @@ ifext="$(ip route show default | grep -oP 'dev \K\S+')";
 ipext="$(curl -4 -fsSL --connect-timeout 5 ifconfig.me 2>/dev/null || echo '')"
 #ipext="$(ip route show default | grep -oP 'via \K\S+')";
 
-### Функции ввода:
-##################
-#_def_autocomp() {
-#    local DEFAULT_VALUE="$1" QUESTION="$2" DEFAULT_VALUE_LENGTH="${#DEFAULT_VALUE}"
-#    local QUESTION_LENGTH="${#QUESTION}"
-#    cursor_move_up "1";
-#    cursor_move_right "$QUESTION_LENGTH";
-#    printf "$DEFAULT_VALUE";
-#    cursor_move_down "1";
-#    cursor_move_left $((DEFAULT_VALUE_LENGTH + QUESTION_LENGTH));
-#}
-#_user_input() {
-#    read -r USER_INPUT
-#    USER_INPUT="${USER_INPUT#"${USER_INPUT%%[![:space:]]*}"}"
-#    USER_INPUT="${USER_INPUT%"${USER_INPUT##*[![:space:]]}"}"
-#}
+gdbyip() {
+    if [[ "$1" != "" ]]; then
+        local ip_address="$1" domains=()
+    [[ "$ip_address" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+    local o
+    for o in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"; do
+        (( 10#$o <= 255 )) || return 1
+    done
+        domains="$(dig -x "$ip_address" +short)"
+        printf "%*s\n" "${domains[@]}"
+    else
+        printf "$(cecho sR "Нужен аргумент 'N' IP!")\n"
+    fi
+}
 
 ### Сетевые проверки:
 #####################
@@ -87,96 +85,59 @@ fi
 #}
 #ip6info() { curl --connect-timeout 1 v6.ipinfo.io; }
 
-### Проверка IP:
-################
-validate_ipv4() {
-    VALIDATE_IPV4="$1"
-    case "$VALIDATE_IPV4" in
-        *.*.*.*.*) return 1 ;;
-    esac
-    IFS="."
-    AWG_VALIDATE_IPV4_PARTS_COUNT="0"
-    for PART in $VALIDATE_IPV4; do
-        AWG_VALIDATE_IPV4_PARTS_COUNT=$((AWG_VALIDATE_IPV4_PARTS_COUNT + 1))
+### Определение наличия native IPv6 на VPS:
+###########################################
+# Native IPv6 = глобально маршрутизируемый адрес (НЕ ULA fc00::/7, НЕ link-local fe80::) И наличие IPv6 default-маршрута.
+# Любого из условий по отдельности мало:
+#   - global-адрес без default route -> нет выхода в IPv6-интернет (клиент с ::/0 получит black-hole);
+#   - ULA (fddd::/...) для `ip` имеет scope global, но в интернет не маршрутизируется. Эхо 1 только когда выполнены оба условия, иначе 0.
+detect_native_ipv6() {
+    local have_addr=0 have_route=0
+    ip -6 addr show scope global 2>/dev/null | grep -oP 'inet6\s+\K[0-9a-fA-F:]+' | grep -qviE '^(fc|fd)' && have_addr=1
+    ip -6 route show default 2>/dev/null | grep -q . && have_route=1
+    [[ "$have_addr" -eq 1 && "$have_route" -eq 1 ]] && ok_box "Native IPv6 на VPS присутствует."; return 0 || { warn_box "Native IPv6 на VPS отсутствует."; return 1; }
+}
+
+### Валидаторы IP / CIDR:
+#########################
+# Проверяют не только форму, но и числовые диапазоны: октеты IPv4 0-255, префикс IPv4 0-32, IPv6 0-128.
+# Без префикса адрес валиден (wireguard-tools трактует голый IPv4 как /32, IPv6 как /128 - host-route).
+# _valid_ipv4 <addr> : ровно 4 октета, каждый 0-255 (10# защищает от трактовки ведущего нуля как восьмеричного числа в (( )) ).
+_valid_ipv4() {
+    local ip="$1"
+    [[ "$ip" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || return 1
+    local o
+    for o in "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[4]}"; do
+        (( 10#$o <= 255 )) || return 1
     done
-    if [ "$AWG_VALIDATE_IPV4_PARTS_COUNT" != "4" ]; then
-        unset IFS
-        return 1
-    fi
-    for PART in $VALIDATE_IPV4; do
-        case "$PART" in
-            [0-9] | [0-9][0-9] | [0-9][0-9][0-9]) ;;
-            *)
-                unset IFS
-                return 1
-                ;;
-        esac
-        if [ "$PART" -lt 0 ] || [ "$PART" -gt 255 ]; then
-            unset IFS
-            return 1
-        fi
-    done
-    unset IFS
     return 0
 }
 
-validate_ipv6() {
-    VALIDATE_IPV6="$1"
-    case "$VALIDATE_IPV6" in
-        *.*) return 1 ;;
-        *:::*) return 1 ;;
-        *::*::*) return 1 ;;
+# _valid_ipv6 <addr> : структурная проверка (не только charset). Допускает одну компрессию "::"; без неё требует ровно 8 групп по 1-4 hex; с ней - не более 7.
+# Встроенный IPv4 (::ffff:1.2.3.4) намеренно не поддержан - в AllowedIPs туннеля не встречается, а точки уже отсекаются charset-проверкой.
+_valid_ipv6() {
+    local ip="$1"
+    [[ "$ip" =~ ^[0-9A-Fa-f:]+$ ]] || return 1
+    case "$ip" in
+        *:::*)   return 1 ;;                     # три и более ":" подряд
+        *::*::*) return 1 ;;                     # более одной "::"
     esac
-    AWG_VALIDATE_IPV6_LEFT_SIDE=${VALIDATE_IPV6%%::*}
-    AWG_VALIDATE_IPV6_RIGHT_SIDE=${VALIDATE_IPV6#*::}
-    if [ "$AWG_VALIDATE_IPV6_LEFT_SIDE" = "$AWG_VALIDATE_IPV6_RIGHT_SIDE" ]; then
-        AWG_VALIDATE_IPV6_RIGHT_SIDE=""
-    fi
-    IFS=":"
-    AWG_VALIDATE_IPV6_LEFT_SIDE_PARTS_COUNT="0"
-    for PART in $AWG_VALIDATE_IPV6_LEFT_SIDE; do
-        AWG_VALIDATE_IPV6_LEFT_SIDE_PARTS_COUNT=$((AWG_VALIDATE_IPV6_LEFT_SIDE_PARTS_COUNT + 1))
+    [[ "$ip" == :* && "$ip" != ::* ]] && return 1   # одиночное ведущее ":"
+    [[ "$ip" == *: && "$ip" != *:: ]] && return 1   # одиночное хвостовое ":"
+    local has_dcolon=0
+    [[ "$ip" == *::* ]] && has_dcolon=1
+    local IFS=':' parts=() p ngroups=0
+    read -ra parts <<< "$ip"
+    for p in "${parts[@]}"; do
+        [[ -z "$p" ]] && continue                 # пустые поля от "::"
+        [[ "$p" =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1
+        (( ngroups++ ))
     done
-    AWG_VALIDATE_IPV6_RIGHT_SIDE_PARTS_COUNT="0"
-    for PART in $AWG_VALIDATE_IPV6_RIGHT_SIDE; do
-        AWG_VALIDATE_IPV6_RIGHT_SIDE_PARTS_COUNT=$((AWG_VALIDATE_IPV6_RIGHT_SIDE_PARTS_COUNT + 1))
-    done
-    AWG_VALIDATE_IPV6_PARTS_SUM=$((AWG_VALIDATE_IPV6_LEFT_SIDE_PARTS_COUNT + AWG_VALIDATE_IPV6_RIGHT_SIDE_PARTS_COUNT))
-    case "$VALIDATE_IPV6" in
-        *::*)
-            if [ "$AWG_VALIDATE_IPV6_PARTS_SUM" -gt 7 ]; then
-                unset IFS
-                return 1
-            fi
-            ;;
-        *)
-            if [ "$AWG_VALIDATE_IPV6_PARTS_SUM" != "8" ]; then
-                unset IFS
-                return 1
-            fi
-            ;;
-    esac
-    if [ -n "$AWG_VALIDATE_IPV6_LEFT_SIDE" ]; then
-        for PART in $AWG_VALIDATE_IPV6_LEFT_SIDE; do
-            case "$PART" in
-                [0-9a-fA-F] | [0-9a-fA-F][0-9a-fA-F] | [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] | [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
-                *)
-                    unset IFS
-                    return 1 ;;
-            esac
-        done
+    if [[ $has_dcolon -eq 1 ]]; then
+        (( ngroups <= 7 )) || return 1            # "::" заменяет >=1 группу
+    else
+        (( ngroups == 8 )) || return 1
     fi
-    if [ -n "$AWG_VALIDATE_IPV6_RIGHT_SIDE" ]; then
-        for PART in $AWG_VALIDATE_IPV6_RIGHT_SIDE; do
-            case "$PART" in
-                [0-9a-fA-F] | [0-9a-fA-F][0-9a-fA-F] | [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F] | [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
-                *)
-                    unset IFS
-                    return 1 ;;
-            esac
-        done
-    fi
-    unset IFS
     return 0
 }
 
@@ -207,11 +168,9 @@ strip_ipv6_routes() {
     printf '%s' "$out"
 }
 
-validate_tunnel_iface() { command awg show 2>/dev/null | grep -q "interface: $1" || return 1; }
+validate_tunnel_iface() { local _awg="$1"; command $awg3 show 2>/dev/null | grep -q "interface: $2" || return 1; }
 
-validate_name() {
-    [[ "$1" =~ ^[a-zA-Z0-9_-]+$ ]]
-}
+validate_name() { [[ "$1" =~ ^[a-zA-Z0-9_-]+$ ]]; }
 
 validate_client_name() {
     local name="$1"
@@ -278,6 +237,51 @@ validate_subnet() {
     ip_int=$(_ipv4_to_int "$ip")
     (( ip_int != net_int )) || { log_error "'$ip' — адрес сети, нужен адрес хоста"; return 1; }
     (( ip_int != bcast_int )) || { log_error "'$ip' — broadcast, нужен адрес хоста"; return 1; }
+    return 0
+}
+
+### Валидация endpoint (FQDN / IPv4 / [IPv6]):
+##############################################
+# Возвращает 0 если endpoint безопасен и попадает под один из форматов, иначе 1 (caller сам решает die или log_warn + unset).
+# Запрещает newline/CR/quotes/backslash чтобы предотвратить injection в awgsetup_cfg.init и client.conf через --endpoint флаг (audit).
+validate_endpoint() {
+    local ep="$1"
+    [[ -n "$ep" ]] || return 1
+    # Запрещаем символы которые могут сломать конфиг или внести injection
+    [[ "$ep" != *$'\n'* && "$ep" != *$'\r'* && \
+       "$ep" != *"'"* && "$ep" != *'"'* && "$ep" != *'\\'* && \
+       "$ep" != *' '* && "$ep" != *$'\t'* ]] || return 1
+    # Форма [IPv6]: структурная проверка содержимого скобок. Прежний charset-only пропускал мусор вроде [:::] / [1:2:3]. Зеркало _valid_ipv6 из awg_common.sh.
+    if [[ "$ep" == \[*\] ]]; then
+        local inner="${ep#\[}"; inner="${inner%\]}"
+        [[ "$inner" =~ ^[0-9A-Fa-f:]+$ ]] || return 1
+        case "$inner" in
+            *:::*|*::*::*) return 1 ;;
+        esac
+        [[ "$inner" == :* && "$inner" != ::* ]] && return 1
+        [[ "$inner" == *: && "$inner" != *:: ]] && return 1
+        local has_dcolon=0; [[ "$inner" == *::* ]] && has_dcolon=1
+        local IFS=':' parts=() p ngroups=0
+        read -ra parts <<< "$inner"
+        for p in "${parts[@]}"; do
+            [[ -z "$p" ]] && continue
+            [[ "$p" =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1
+            ngroups=$((ngroups + 1))
+        done
+        if [[ $has_dcolon -eq 1 ]]; then
+            (( ngroups <= 7 )) || return 1
+        else
+            (( ngroups == 8 )) || return 1
+        fi
+        return 0
+    fi
+    # Иначе FQDN или IPv4
+    [[ "$ep" =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*|[0-9]{1,3}(\.[0-9]{1,3}){3})$ ]] || return 1
+    # Если IPv4 формат - дополнительно проверяем диапазон октетов 0-255
+    if [[ "$ep" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]]; then
+        [[ "${BASH_REMATCH[1]}" -le 255 && "${BASH_REMATCH[2]}" -le 255 && \
+           "${BASH_REMATCH[3]}" -le 255 && "${BASH_REMATCH[4]}" -le 255 ]] || return 1
+    fi
     return 0
 }
 
@@ -477,4 +481,95 @@ _cidr_bounds() {
     ip_int=$(_ipv4_to_int "$ip")
     mask=$(( 0xFFFFFFFF << (32 - prefix) & 0xFFFFFFFF ))
     echo "$(( ip_int & mask )) $(( (ip_int & mask) | (~mask & 0xFFFFFFFF) ))"
+}
+
+# _is_full_tunnel <allowed_ips> : покрывает ли список ВЕСЬ публичный IPv4.
+# Режим 1 задаёт полный туннель строкой 0.0.0.0/0, режим 2 (был дефолтом установки до v5.34.0) - списком из 34 записей:
+# весь публичный IPv4 минус частные сети. Списком, а не нулём, он записан только чтобы обойти баг iOS на 0.0.0.0/5 (issue #42),
+# по смыслу это тоже полный туннель. Сравнение строки с литералом отвечало на эти два случая по-разному,
+# и установка по умолчанию теряла тогда ::/0 - IPv6 устройства уходил наружу со своим настоящим адресом.
+# Настоящая раздельная маршрутизация (режим 3) не покрывает публичное пространство и получает отрицательный ответ, как и раньше.
+# Возврат: 0 - полный туннель, 1 - нет. Неразобранный маршрут тоже даёт 1, но ГРОМКО: молчаливое 'считаю раздельным' здесь неотличимо от честного ответа.
+_is_full_tunnel() {
+    local list="$1" tok b lo hi pairs="" cur=0
+    local -a toks=()
+    # read берёт ТОЛЬКО ПЕРВУЮ СТРОКУ, даже когда перевод строки стоит в IFS, поэтому переводы строк и возвраты каретки превращаю в пробелы заранее.
+    # AllowedIPs бывает многострочным (wg допускает повтор ключа, D#38), а конфиг, поправленный из Windows, приносит \r в конце последнего токена.
+    list="${list//$'\r'/}"
+    list="${list//$'\n'/, }"
+    local IFS=$', \t'
+    read -ra toks <<< "$list"
+    IFS=$' \t\n'
+    # Верхняя граница на размер списка. Каждый токен стоит одной подстановки команды, то есть процесса: наши списки короче 40 записей,
+    # а вот пользовательский на десятки тысяч сетей (инверсия страновых диапазонов - популярный в тредах приём) сделал бы каждый add и regen многоминутным.
+    # Отказ ГРОМКИЙ и с числом: поведение остаётся прежним (::/0 не дописывается), но причина видна, а не выглядит как «проверил и сошлось».
+    if (( ${#toks[@]} > 512 )); then
+        log_warn "AllowedIPs: маршрутов ${#toks[@]}, это больше предела проверки (512) - список считаю раздельным, ::/0 не дописываю."
+        return 1
+    fi
+    for tok in "${toks[@]}"; do
+        [[ -z "$tok" ]] && continue
+        # IPv6-токен на покрытие IPv4 не влияет: dual-stack список уже содержит свою IPv6-часть, и она не должна мешать ответу про IPv4.
+        [[ "$tok" == *:* ]] && continue
+        [[ "$tok" == */* ]] || tok="${tok}/32"
+        if ! b=$(_cidr_bounds "$tok"); then
+            log_warn "AllowedIPs: маршрут '$tok' не разобран - список считаю раздельным, ::/0 не дописываю."
+            return 1
+        fi
+        pairs+="${b}"$'\n'
+    done
+    # Пустой список (или только IPv6) - не полный туннель.
+    [[ -n "$pairs" ]] || return 1
+
+    # Проход по объединению интервалов: всё, что осталось непокрытым, обязано целиком лежать в служебных диапазонах.
+    # sort -n даёт возрастающий порядок, перекрытия и дубликаты схлопываются курсором cur.
+    # Сортировка в переменную, а НЕ подстановкой процесса: отказ sort внутри <(...) родительской оболочке не виден,
+    # и предикат молча отвечал бы 'раздельный' на исправном списке - то есть на сломанном хосте тихо вернулось бы поведение до этой правки,
+    # включая режим 1, который от sort раньше не зависел вовсе.
+    local sorted
+    sorted=$(printf '%s' "$pairs" | LC_ALL=C sort -n -k1,1 -k2,2) || {
+        log_warn "AllowedIPs: не удалось упорядочить маршруты - полноту туннеля не проверяю, ::/0 не дописываю."
+        return 1
+    }
+    while read -r lo hi; do
+        if (( lo > cur )); then
+            _awg_ipv4_range_is_non_public "$cur" $(( lo - 1 )) || return 1
+        fi
+        if (( hi + 1 > cur )); then cur=$(( hi + 1 )); fi
+    done <<< "$sorted"
+    if (( cur <= 4294967295 )); then
+        _awg_ipv4_range_is_non_public "$cur" 4294967295 || return 1
+    fi
+    return 0
+}
+
+# _append_ipv6_full_tunnel_route <allowed_ips> : печатает список с дописанным  ::/0, если это полный туннель и IPv6 в списке ещё нет; иначе список как есть.
+# Зачем: IPv6 через IPv4-туннель не проходит, поэтому без этой строки он идёт мимо VPN со своим настоящим адресом - заблокированный ресурс с записью AAAA
+# остаётся заблокированным, а выглядит это как 'VPN не работает на мобильном'. ::/0 забирает IPv6 в туннель, где он гасится, и клиент откатывается на IPv4
+# (Happy Eyeballs). Того же требует iOS AmneziaVPN для режима 'весь трафик'.
+# Идемпотентность обязательна: regen выполняется многократно и в том числе поверх dual-stack клиента, чья IPv6-часть уже сформирована.
+_append_ipv6_full_tunnel_route() {
+    local list="$1"
+    # Решение принимается по нормализованной копии, поэтому и печатать надо её.
+    # Иначе возврат каретки из середины строки уехал бы в клиентский конфиг вместе с дописанным ::/0, а такой токен клиенты отвергают.
+    # Возврат каретки не значим НИКОГДА и просто удаляется; перевод строки - это разделитель элементов, поэтому он становится запятой, а не пробелом:
+    # пробел склеил бы два маршрута в один нечитаемый токен.
+    list="${list//$'\r'/}"
+    list="${list//$'\n'/, }"
+    if [[ "$list" != *:* ]] && _is_full_tunnel "$list"; then
+        printf '%s, ::/0' "$list"
+    else
+        printf '%s' "$list"
+    fi
+}
+
+# Полный туннель с явной IPv6-частью AllowedIPs, но без ::/0, на сервере с нативным IPv6 (Issue #253):
+# ровно то состояние, о котором regen предупреждает при сохранении индивидуального списка.
+# Единый предикат для regen и render - две копии условия разъедутся молча. Условие про нативный IPv6 обязательно:
+# без него клиенту положена туннельная ULA вместо ::/0, это документированное правило, а не утечка, и предупреждение звало бы чинить исправное.
+_aip_full_tunnel_v6_gap() {
+    local list="$1"
+    [[ "${SERVER_HAS_NATIVE_IPV6:-0}" == "1" \
+        && "$list" == *:* && "$list" != *"::/0"* ]] \
+        && _is_full_tunnel "$list"
 }

@@ -230,12 +230,72 @@ extract_peers() {
     ' "$f"
 }
 
-# awg3_render_server_conf OUT PRIVKEY ADDRESS PORT MTU POSTUP POSTDOWN [PEERS_SRC]
-# Общие параметры берутся из G_S*/G_H*/G_HPK, отправительские — из G_Jc,
-# G_Jmin, G_Jmax, G_I1..G_I5, G_CPA, поэтому вызывающая сторона обязана
-# заранее вызвать awg3_gen_shared_params и awg3_gen_sender_params.
-# Пиры дописываются во ВРЕМЕННЫЙ файл до mv: иначе сбой между записью конфига
-# и добавлением пиров оставил бы живой сервер без единого клиента.
+_awg_xtrace_guard() {
+    local _xt=0 _rc=0
+    case $- in *x*) _xt=1; set +x ;; esac
+    "$@" || _rc=$?
+    if (( _xt )); then set -x; fi
+    return "$_rc"
+}
+
+# _awg31_append_profile_lines <файл> : дописать в [Interface] строки третьей линии - HeaderProtectionKey и ContentPaddingAddition.
+# На установке 2.0 не делает ничего и возвращает 0: ветка 2.0 не меняется. При нечитаемом маркере без файла ключа тоже ничего не пишет (правило awg_hpk_ensure).
+# 🔴 Значение ключа НЕ проходит через argv и не попадает в трассировку: функция обёрнута защитой, а из файла читается перенаправлением.
+# Клиентский рендер сам не защищён (ключ клиента приходит аргументом; защищены его вызывающие generate_client и regenerate_client),
+# поэтому читать ключ прямо в нём было бы утечкой под --verbose. Значение берётся из файла ключа.
+# Сверять его здесь с серверным конфигом НЕ надо: при существующем awg0.conf оба рендера идут через load_awg_params, а тот зовёт awg_hpk_ensure,
+# который расхождение файла и конфига уже ловит и называет причину. На первой установке конфига ещё нет, и согласованность обеспечивает awg_hpk_ensure install в шаге 6.
+# Вторая проверка тем же кодом была бы мёртвой и создавала бы вид двойной защиты.
+_awg31_append_profile_lines() {
+    _awg_xtrace_guard _awg31_append_profile_lines_body "$@"
+}
+
+_awg31_append_profile_lines_body() {
+    local target="$1" gen keyfile key why cpa
+    # Нечитаемый маркер - то же правило, что в awg_hpk_ensure: без ключа это не повод отнимать add и regen из-за правки init, строки третьей линии просто не пишутся;
+    # с файлом ключа поколение не угадать, и это отказ.
+    if ! gen=$(_awg_generation_from_init "$CONFIG_FILE"); then
+        keyfile=$(awg_hpk_path) || { log_error "AWG_DIR не задан: ключ защиты заголовков не проверен"; return 1; }
+        if [[ -e "$keyfile" || -L "$keyfile" ]]; then
+            log_error "Маркер поколения AWG_PROTOCOL в $CONFIG_FILE не читается (допустимы 2.0 и 3.1), а файл ключа $keyfile есть: конфиг не записан"
+            return 1
+        fi
+        return 0
+    fi
+    [[ "$gen" == "3.1" ]] || return 0
+    keyfile=$(awg_hpk_path) || { log_error "AWG_DIR не задан: ключ защиты заголовков не прочитать"; return 1; }
+    if [[ ! -f "$keyfile" ]]; then
+        log_error "Установка помечена поколением 3.1, а файла ключа $keyfile нет: профиль без ключа не подключится, конфиг не записан"
+        return 1
+    fi
+    IFS= read -r key < "$keyfile" || { log_error "Файл ключа $keyfile не читается: конфиг не записан"; return 1; }
+    if ! [[ "$key" =~ ^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$ ]]; then
+        log_error "Файл ключа $keyfile не похож на ключ: нужны 32 байта в base64, 44 символа"
+        return 1
+    fi
+    # Пишем ровно то значение, которое проверили: комментарий и пробелы awg_cpa_check_safe отбрасывает так же, как tools,
+    # а в конфиге и дальше в ссылке vpn:// они стали бы частью значения.
+    cpa="${AWG_CPA:-}"
+    cpa="${cpa%%#*}"
+    cpa="${cpa//[[:space:]]/}"
+    why=$(awg_cpa_check_safe "$cpa") || {
+        log_error "ContentPaddingAddition: ${why}. Конфиг не записан"
+        return 1
+    }
+    printf 'HeaderProtectionKey = %s\n' "$key" >> "$target" || {
+        log_error "Ошибка записи ключа защиты заголовков в конфиг"
+        return 1
+    }
+    printf 'ContentPaddingAddition = %s\n' "$cpa" >> "$target" || {
+        log_error "Ошибка записи ContentPaddingAddition в конфиг"
+        return 1
+    }
+    return 0
+}
+
+# awg3_render_server_conf OUT PRIVKEY ADDRESS PORT MTU POSTUP POSTDOWN [PEERS_SRC] Общие параметры берутся из G_S*/G_H*/G_HPK, отправительские — из G_Jc,
+# G_Jmin, G_Jmax, G_I1..G_I5, G_CPA, поэтому вызывающая сторона обязана заранее вызвать awg3_gen_shared_params и awg3_gen_sender_params.
+# Пиры дописываются во ВРЕМЕННЫЙ файл до mv: иначе сбой между записью конфига и добавлением пиров оставил бы живой сервер без единого клиента.
 awg3_render_server_conf() {
     local out="$1" privkey="$2" address="$3" port="$4" mtu="$5"
     local postup="$6" postdown="$7" peers_src="${8:-}"
@@ -256,9 +316,8 @@ awg3_render_server_conf() {
         printf 'Address = %s\n' "$address"
         printf 'ListenPort = %s\n' "$port"
         printf 'MTU = %s\n' "$mtu"
-#        printf 'PostUp = %s\n' "$postup"
-#        printf 'PostDown = %s\n' "$postdown"
-#        printf '\n'
+        printf 'PostUp = %s\n' "$postup"
+        printf 'PostDown = %s\n' "$postdown"
         printf 'S1 = %s\nS2 = %s\nS3 = %s\nS4 = %s\n' "$G_S1" "$G_S2" "$G_S3" "$G_S4"
         printf 'H1 = %s\nH2 = %s\nH3 = %s\nH4 = %s\n' "$G_H1" "$G_H2" "$G_H3" "$G_H4"
         printf 'HeaderProtectionKey = %s\n' "$G_HPK"
@@ -296,13 +355,40 @@ server_public_key() {
 
 ### Команда: server-init:
 # Создание сервера AWG 3.0 с нуля: ключи, параметры обфускации, NAT, конфиг, форвардинг.
-# Промежуточной стадии 2.0 не существует, server-upgrade здесь не
-# участвует — он остаётся только для уже существующих 2.0-серверов.
+# Промежуточной стадии 2.0 не существует, server-upgrade здесь не участвует — он остаётся только для уже существующих 2.0-серверов.
 awg3_guard_existing_server() {
     if [[ -f "$AWG3_SYSCONF" ]] && [[ "$AWG3_SRV_FORCE" -ne 1 ]]; then
         log_error "Сервер уже существует: ${AWG3_SYSCONF}!"
         log_error "Пересоздать с переносом пиров (переменная \$AWG3_SRV_FORCE=1, или пункт меню: \"Принудительно инициализировать сервер\")!"
         return 1
+    fi
+    return 0
+}
+
+# enable_forwarding IPV6 FILE — форвардинг через sysctl.d плюс немедленно.
+enable_forwarding() {
+    local ipv6="$1" file="$2"
+    {
+        if command -v sysctl -n "net.ipv4.ip_forward" = 0 >/dev/null 2>&1; then
+            ask_confirm "Будут записаны новые значения sysctl (net.ipv4.ip_forward=1)" "n" || return 1
+            printf '# Создано awg3.sh server-init.\n'
+            printf 'net.ipv4.ip_forward = 1\n'
+        fi
+        if [[ "$ipv6" == "on" ]] && [[ ! -f "$file" ]]; then
+            if command -v sysctl -n "net.ipv6.conf.all.forwarding" = 0 >/dev/null 2>&1; then
+                ask_confirm "Будут записаны новые значения sysctl (net.ipv6.conf.all.forwarding=1)" "n" || return 1
+                printf 'net.ipv6.conf.all.forwarding=1\n' || true
+            fi
+            printf 'net.ipv6.conf.all.forwarding = 1\n'
+        elif [[ -f "$file" ]] && grep -q 'net.ipv6.conf.all.forwarding' "$file"; then
+            log_warn '# Файл sysctl.d уже содержит net.ipv6.conf.all.forwarding, не меняю его. Если IPv6 не нужен, отключите его вручную.'
+        else
+            log_warn '# IPv6 не включён, net.ipv6.conf.all.forwarding не меняю. Если IPv6 нужен, включите его вручную.'
+        fi
+    } > "$file" || { log_err "Не записан ${file}!"; return 1; }
+    chmod 644 "$file" || { log_err "Не выставлены пермишены ${file}!"; return 1; }
+    if command -v sysctl >/dev/null 2>&1; then
+        sysctl -q -p "$file" 2>/dev/null || log_warn "sysctl Не применил ${file}, потребуется перезагрузка."
     fi
     return 0
 }
@@ -342,11 +428,13 @@ awg3_server_init() {
     fi
     awg3_gen_shared_params
     awg3_gen_sender_params
-    #local postup postdown    #postup= $(awg3_build_postup     "$nic" "$AWG3_SRV_MTU" "$AWG3_SRV_ISOLATION" "$AWG3_SRV_IPV6")    #postdown= $(awg3_build_postdown "$nic" "$AWG3_SRV_MTU" "$AWG3_SRV_ISOLATION" "$AWG3_SRV_IPV6")
+    local postup postdown
+    postup=$(awg3_build_postup "$nic" "$AWG3_SRV_MTU" "$AWG3_SRV_ISOLATION" "$AWG3_SRV_IPV6")
+    postdown=$(awg3_build_postdown "$nic" "$AWG3_SRV_MTU" "$AWG3_SRV_ISOLATION" "$AWG3_SRV_IPV6")
     local privkey
     privkey=$(tr -d '[:space:]' < "$AWG3_SERVER_KEYS/server_private.key")
     awg3_render_server_conf "$AWG3_SYSCONF" "$privkey" "$address" "$AWG3_SRV_PORT" "$AWG3_SRV_MTU" "$postup" "$postdown" "$peers_src"
-    #enable_forwarding "$AWG3_SRV_IPV6" /etc/sysctl.d/99-awg3.conf || log_warn "Форвардинг не настроен"
+    enable_forwarding "$AWG3_SRV_IPV6" /etc/sysctl.d/99-awg3.conf || log_warn "Форвардинг не настроен"
     ROLLBACK_ACTIVE=0
     trap - EXIT
     if [[ "$AWG3_DO_APPLY" -eq 1 ]]; then
@@ -356,7 +444,7 @@ awg3_server_init() {
     log_ok "Порт: ${AWG3_SRV_PORT}/udp, подсеть: ${AWG3_SRV_SUBNET}, MTU: ${AWG3_SRV_MTU}."
     log_ok "Изоляция клиентов: ${AWG3_SRV_ISOLATION}, IPv6: ${AWG3_SRV_IPV6}."
     log "Далее: добавить клиента в меню \"Управление клиентами\"."
-    success_box "Сервер инициализирован."
+    ok_box "Сервер инициализирован."
 }
 
 #-> Ловушка висит на EXIT, а не на ERR: die() выходит через exit, и ERR на нём не срабатывает.
@@ -377,20 +465,34 @@ _rollback_server_init() {
     exit "$rc"
 }
 
+get_eplist() {
+    local lst=()
+    local return_value
+    local epipv4="$(ipext)"
+    validate_ip "$ephost" > /dev/null 2>&1 && lst="${epipv4}" || { log_error "IPv4 ${epiv4} не катит!"; return 1; }
+
+    local ephost="$(hostname)"
+    validate_domain "$ephost" > /dev/null 2>&1 && lst="${lst} ${ephost}" || { log_error "Домен hostname ${ephost} не катит!"; return 1; }
+    echo "$lst"
+    return 0
+}
+
 ### Команда: awg3_set_endpoint:
 # Меняет имя хоста для клиентских Endpoint, не трогая ничего больше.
 # Отдельная команда нужна потому, что единственная альтернатива: "Принудительно инициализировать сервер" перегенерирует общие параметры и обесценит все выданные конфиги.
 awg3_set_endpoint() {
-    local name
-    ask "IP или имя endpoint:" "$ipext" name
-    [[ -n "$name" ]] || log_error "Укажите адрес или имя хоста: 111.222.333.444 | vpn.example.com!"; return 0;
-    [[ "$name" =~ ^[a-zA-Z0-9._-]+$ ]] || log_error "недопустимое имя хоста: '$name'"; return 0;
-    [[ -f "$AWG3_SYSCONF" ]] || log_error "серверный конфиг не найден: $AWG3_SYSCONF"; return 0;
+    local _epLst=$(get_eplist)
+    single_select "true" result _epLst 0 "IP или имя endpoint"
+    name="$result"
+#    ask "IP или имя endpoint:" "$ipext" name
+    [[ -n "$name" ]] || log_error "Укажите адрес или имя хоста: 111.222.333.444 | vpn.example.com!"; return 1;
+    [[ "$name" =~ ^[a-zA-Z0-9._-]+$ ]] || log_error "недопустимое имя хоста: '$name'"; return 1;
+    [[ -f "$AWG3_SYSCONF" ]] || log_error "Серверный конфиг не найден: ${AWG3_SYSCONF}!"; return 1;
     local previous
     previous=$(awg3_server_endpoint_name)
     awg3_backup_file "$AWG3_SYSCONF"
     local tmp
-    tmp=$(mktemp "${AWG3_SYSCONF}.tmp.XXXXXX") || log_error "mktemp не сработал"; return 0;
+    tmp=$(mktemp "${AWG3_SYSCONF}.tmp.XXXXXX") || error_box "mktemp не сработал!"; return 1;
     chmod 600 "$tmp"
     # Строка живёт в [Interface] сразу после заголовка. Прежняя убирается, а не дублируется: иначе awg3_server_endpoint_name читал бы первую попавшуюся.
     awk -v host="$name" '
@@ -635,7 +737,7 @@ awg3_edit_default_env() {
     while true; do
         printstr "Интерфейс AmneziaWG. По умолчанию: ${def_iface}."
         ask "Имя интерфейса" "$def_iface" AWG3_NEW_IFACE
-        ! validate_tunnel_iface "${AWG3_NEW_IFACE}" > /dev/null 2>&1 || { log_warn "${AWG3_NEW_IFACE}"; continue; }
+        ! validate_tunnel_iface "${AWG3_TOOLS_EXEC}" "${AWG3_NEW_IFACE}" > /dev/null 2>&1 || { log_warn "${AWG3_NEW_IFACE}"; continue; }
         break
     done
     log_ok "Интерфейс: ${AWG3_NEW_IFACE}"
@@ -680,9 +782,9 @@ awg3_edit_default_env() {
     printstr "DNS для клиентов:"
     select_dns() {
         local _resolver="$1"
-        echo -e "  $(cecho Ws "1) $_resolver (IP туннеля): ${AWG3_NEW_ADDRESS}")"
-        echo -e "  $(cecho Ms '2')$(cecho Ws ") Предустановленные: ${def_dns}")"
-        echo -e "  $(cecho Ws "3) Все: ${AWG3_NEW_ADDRESS}, ${def_dns}")"
+        cecho Ws "  1) $_resolver (IP туннеля): ${AWG3_NEW_ADDRESS}"
+        cecho Ms '  2'; cecho Ws ") Предустановленные: ${def_dns}"
+        cecho Ws "  3) Все: ${AWG3_NEW_ADDRESS}, ${def_dns}"
         while true; do
             ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[2]\033[1m:\033[0m ')" AWG3_NEW_DNS "$def_dns" -
             case "${AWG3_NEW_DNS:-2}" in
@@ -707,10 +809,10 @@ awg3_edit_default_env() {
     local def_allowed="${AWG3_DEFAULT_ALLOWED_IPS}"
     local kill_switch="0.0.0.0/1, 128.0.0.0/1"
     printstr "Маршрутизация трафика:"
-    echo -e "  $(cecho Ms '1')$(cecho Ws ") ${def_allowed} (весь трафик через VPN)")"
-    echo -e "  $(cecho Ws "2) ${kill_switch} (kill switch)")"
-    echo -e "  $(cecho Ws "3) ${AWG3_NEW_SUBNET} (только туннель)")"
-    echo -e "  $(cecho Ws "4) Ввести вручную")"
+    cecho Ms '  1'; cecho Ws ") ${def_allowed} (весь трафик через VPN)"
+    cecho Ws "  2) ${kill_switch} (kill switch)"
+    cecho Ws "  3) ${AWG3_NEW_SUBNET} (только туннель)"
+    cecho Ws '  4) Ввести вручную'
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_ALLOWED_IPS "$def_allowed" -
         case "${AWG3_NEW_ALLOWED_IPS:-1}" in
@@ -726,12 +828,12 @@ awg3_edit_default_env() {
     #-> MTU туннеля:
     local def_mtu="${AWG3_DEFAULT_MTU}"
     printstr "MTU туннеля:"
-    echo -e "  $(cecho Ws "1) 1280 - максимальная совместимость (мобильные сети, GTP)")"
-    echo -e "  $(cecho Ws "2) 1300 - баланс и совместимость")"
-    echo -e "  $(cecho Ms '3')$(cecho Ws ") 1320 - баланс (рекомендуется 'ЭТО БАЗА')")"
-    echo -e "  $(cecho Ws "4) 1360 - баланс и скорость")"
-    echo -e "  $(cecho Ws "5) 1420 - максимальная скорость (чистый Ethernet)")"
-    echo -e "  $(cecho Ws "6) Ввести вручную")"
+    cecho Ws '  1) 1280 - максимальная совместимость (мобильные сети, GTP)'
+    cecho Ws '  2) 1300 - баланс и совместимость'
+    cecho Ms '  3'; cecho Ws ') 1320 - баланс (рекомендуется "ЭТО БАЗА")'
+    cecho Ws '  4) 1360 - баланс и скорость'
+    cecho Ws '  5) 1420 - максимальная скорость (чистый Ethernet)'
+    cecho Ws '  6) Ввести вручную'
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[3]\033[1m:\033[0m ')" AWG3_NEW_MTU "$def_mtu" -
         case "${AWG3_NEW_MTU:-3}" in
@@ -746,11 +848,62 @@ awg3_edit_default_env() {
     done
     log_ok "MTU: ${AWG3_NEW_MTU}"
 
+    local cur_IP6="$(server_ipv6_state)"
+    log "Текущее состояние IPV6: ${cur_IP6}."
+    log_info "(server-init) IPv6 в туннеле (по умолч.: ${AWG3_DEFAULT_SRV_IPV6})."
+    ask_yn "Включить IPv6 ($cur_IP6)" "n" _ip6
+    [[ "$_ip6" == "yes" ]] && AWG3_NEW_SRV_IPV6="on" || AWG3_NEW_SRV_IPV6="$IP6state"
+    log_ok "IPV6: ${AWG3_NEW_SRV_IPV6}"
+
+    log "Текущее состояние изоляции клиентов IPv6: $(server_isolation_state)1\n"
+    log "server-init изоляция клиентов (%s)\n" "(по умолч.: ${AWG3_DEFAULT_SRV_ISOLATION})"
+    ask_yn "Включить изоляцию клиентов" "n" new_isol
+        if [[ "$new_isol" == "yes" ]]; then
+            AWG3_NEW_SRV_ISOLATION="on"
+        else
+            AWG3_NEW_SRV_ISOLATION="off"
+        fi
+    log_ok "Изоляция клиентов: ${AWG3_NEW_SRV_ISOLATION}"
+
+    local cur_ipv6_state="$(server_ipv6_tunnel_state)"
+    log "Текущее состояние IPv6 туннеля: ${cur_ipv6_state}."
+    ask_yn "Включить IPv6 ($cur_ipv6_state)" "n" _ip6
+    [[ "$_ip6" == "yes" ]] && AWG3_NEW_SRV_IPV6="on" || AWG3_NEW_SRV_IPV6_TUNNEL="off"
+    if [[ "$AWG3_NEW_SRV_IPV6_TUNNEL" = "off" ]]; then
+        if command -v sysctl -n "net.ipv6.conf.all.disable_ipv6" = 1 >/dev/null 2>&1; then
+            ask_confirm "Будут записаны новые значения sysctl (net.ipv6.conf.all.disable_ipv6=0)" "n" || return 1
+            sysctl -w net.ipv6.conf.all.disable_ipv6=0 >/dev/null 2>&1 || true
+        fi
+        if command -v sysctl -n "net.ipv6.conf.default.disable_ipv6" = 1 >/dev/null 2>&1; then
+            ask_confirm "Будут записаны новые значения sysctl (net.ipv6.conf.default.disable_ipv6=0)" "n" || return 1
+            sysctl -w net.ipv6.conf.default.disable_ipv6=0 >/dev/null 2>&1 || true
+        fi
+        if command -v sysctl -n "net.ipv6.conf.lo.disable_ipv6" = 1 >/dev/null 2>&1; then
+            ask_confirm "Будут записаны новые значения sysctl (net.ipv6.conf.default.disable_ipv6=0)" "n" || return 1
+            sysctl -w net.ipv6.conf.lo.disable_ipv6=0 >/dev/null 2>&1 || true
+        fi
+    fi
+    AWG3_SRV_NATIVE_IPV6=$(detect_native_ipv6)
+    if [[ "$AWG3_NEW_SRV_IPV6_TUNNEL" = "on" && "$AWG3_SRV_NATIVE_IPV6" -eq 0 ]]; then
+        log_warn "Native IPv6 не обнаружен на VPS - туннель IPv6 будет работать peer-to-peer без выхода в IPv6-интернет."
+        ask_force "Оставляем?" "n" || { AWG3_NEW_SRV_IPV6_TUNNEL="off"; return 1; }
+    fi
+    ok_box "IPV6 Туннель: ${AWG3_NEW_SRV_IPV6_TUNNEL}"
+
+    log "server-init подсеть IPv6 (по умолч.: ${AWG3_DEFAULT_SRV_IPV6_SUBNET})."
+    log "Текущая IPV6 подсеть: ${6SNET}."
+    ask_yn "Меняем IPv6 подсеть" "n" _6snet
+    if [[ "$_6snet" == "yes" ]]; then
+        ask "Введите новую подсеть IPv6 (fddd:2c4:2c4:2c4::/64)" "${AWG3_DEFAULT_SRV_SUBNET}" _6snet
+        _valid_ipv6 "$_6snet" && AWG3_NEW_SRV_IPV6_SUBNET="$_6snet" || { failure_box "Некорректная подсеть IPv6: $_6snet"; return 1; }
+    fi
+    ok_box "IPv6 подсеть: ${AWG3_NEW_SRV_IPV6_SUBNET}"
+
     #-> Firewalld Policy:
     local def_fw_policy=${AWG3_DEFAULT_FW_POLICY}
     printstr "Имя firewalld policy:"
-    echo -e "  $(cecho Ms '1')$(cecho Ws ") ${def_fw_policy} (туннель в Интернет)")"
-    echo -e "  $(cecho Ws "2) Ввести вручную")"
+    cecho Ms '  1'; cecho Ws ") ${def_fw_policy} (туннель в Интернет)"
+    cecho Ws '  2) Ввести вручную'
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_FW_POLICY "$def_fw_policy" -
         case "${AWG3_NEW_FW_POLICY:-1}" in
@@ -759,13 +912,13 @@ awg3_edit_default_env() {
             *) AWG3_NEW_FW_POLICY="$def_fw_policy"; break ;;
         esac
     done
-    log_ok "Имя firewalld policy: ${AWG3_NEW_FW_POLICY}"
+    ok_box "Имя firewalld policy: ${AWG3_NEW_FW_POLICY}"
 
     #-> Firewalld Service:
     local def_fw_service=${AWG3_DEFAULT_FW_SERVICE}
     printstr "Имя firewalld service:"
-    echo -e "  $(cecho Ws '1')$(cecho Ws ") ${def_fw_service}")"
-    echo -e "  $(cecho Ws "2) Ввести вручную")"
+    cecho Ws '  1'; cecho Ws ") ${def_fw_service}"
+    cecho Ws '  2) Ввести вручную'
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_FW_SERVICE "$def_fw_service" -
         case "${AWG3_NEW_FW_SERVICE:-1}" in
@@ -774,13 +927,12 @@ awg3_edit_default_env() {
             *) AWG3_NEW_FW_SERVICE="$def_fw_service"; break ;;
         esac
     done
-    log_ok "Имя firewalld service: ${AWG3_NEW_FW_SERVICE}"
+    ok_box "Имя firewalld service: ${AWG3_NEW_FW_SERVICE}"
 
-    #-> Firewalld Zone:
     local def_fw_zone=${AWG3_DEFAULT_FW_ZONE}
-    printstr "Имя firewalld zone:"
-    echo -e "  $(cecho Ms '1')$(cecho Ws ") ${def_fw_zone}")"
-    echo -e "  $(cecho Ws "2) Ввести вручную")"
+    printstr "Имя firewalld zone"
+    cecho Ms '  1'; cecho Ws ") ${def_fw_zone}"
+    cecho Ws '  2) Ввести вручную'
     while true; do
         ask_raw "$(printf '  \033[1mВыбор? \033[1;35m[1]\033[1m:\033[0m ')" AWG3_NEW_FW_ZONE "$def_fw_zone" -
         case "${AWG3_NEW_FW_ZONE:-1}" in
@@ -792,13 +944,25 @@ awg3_edit_default_env() {
     log_ok "Имя firewalld zone: ${AWG3_NEW_FW_ZONE}"
 
     cat >"${AWG3_DEFAULT_ENV}" <<EOF
+
 ### Параметры генерации:
 ########################
-#-> Возможные значения:
-# quick, tls, dtls, sip, dns, noise
-AWG3_PROFILE="dns"
-AWG3_INTENSITY="medium"
-AWG3_ROUTER_MODE=0
+AWG3_PROFILE="${AWG3_NEW_PROFILE}"
+AWG3_INTENSITY="${AWG3_NEW_INTENCITY}"
+AWG3_ROUTER_MODE=${AWG3_NEW_ROUTER_MODE}
+
+### Warp туннель (Cloudflare wgcf):
+###################################
+WARP_DIR="${VPN_TOOLS}/warp"
+WARP_CONF="${SYSCONF_DIR}/warp.conf"
+WARP_ACCOUNT="$WARP_DIR/wgcf-account.toml"
+WARP_PROFILE="$WARP_DIR/wgcf-profile.conf"
+WARP_STATE="$WARP_DIR/state"
+WARP_PEERS="$WARP_DIR/peers.list"
+WARP_HEALTH_LOG="${SYSLOGS_DIR}/awg-warp-health.log"
+WARP_HEALTH_SCRIPT="${VPN_HELPERS}/bin/warp-healthcheck.sh"
+WARP_HEALTH_TIMER="${SYSTEMD_UNIT_DIR}/warp-healthcheck.timer"
+WARP_HEALTH_SERVICE="${SYSTEMD_UNIT_DIR}/warp-healthcheck.service"
 
 ### Параметры клиентов:
 #######################
@@ -830,9 +994,10 @@ AWG3_SRV_PORT="${AWG3_NEW_PORT}"
 AWG3_SRV_SUBNET="${AWG3_NEW_SUBNET}"
 AWG3_SRV_ADDRESS="${AWG3_NEW_ADDRESS}/24"
 AWG3_SRV_MTU="${AWG3_NEW_MTU}"
-AWG3_SRV_ISOLATION="off"
-AWG3_SRV_IPV6="off"
-AWG3_SRV_IPV6_SUBNET="fddd:2c4:2c4:2c4::/64"
+AWG3_SRV_ISOLATION="${AWG3_NEW_ISOLATION}"
+AWG3_SRV_IPV6="${AWG3_NEW_IPV6}"
+AWG3_SRV_IPV6_TUNNEL="${AWG3_NEW_IPV6_TUNNEL}"
+AWG3_SRV_IPV6_SUBNET="${AWG3_NEW_IPV6_SUBNET}"
 EOF
     chmod 600 "$AWG3_DEFAULT_ENV"
     success_box "Записано в ${AWG3_DEFAULT_ENV}."

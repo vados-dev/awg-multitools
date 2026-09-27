@@ -1,6 +1,8 @@
 ### Стартовые переменные для AWG3:
 ##################################
 AWG3_SCRIPT_VERSION="1.2.0"
+readonly AWG3_PROTOCOL="3.1"
+readonly AWG3_TOOLS_PROTOCOL="31"
 AWG3_CONF_VER="config version: v$(date '+%Y%m%d-%H%M')-3.1 ($pr_owner edition)."
 
 AWG3_DEFAULT_IFACE="awg3vds"
@@ -17,8 +19,9 @@ AWG3_SYSCONF="${AWG_SYSCONF}/${AWG3_DEFAULT_IFACE}.conf"
 AWG3_CLIENTS_CONFIGS="${AWG3_CONFIGS}/clients"
 AWG3_LEGACY_KEYS="${AWG3_CLIENTS_CONFIGS}/keys"
 
-AWG3_SERVICE="awg3-quick@${AWG3_DEFAULT_IFACE}.service"
-AWG3_QUICK_SCRIPT="${AWG3_HELPERS}/"
+AWG3_TOOLS_EXEC="awg${AWG3_TOOLS_PROTOCOL}"
+AWG3_QUICK_SCRIPT="${AWG3_TOOLS_EXEC}-quick"
+AWG3_SERVICE="AWG3_QUICK_SCRIPT@${AWG3_DEFAULT_IFACE}.service"
 
 AWG3_DEFAULT_ENV="${AWG3_CONFIGS}/.default-env"
 AWG3_LOCK_DIR="/var/run"
@@ -35,10 +38,6 @@ AWG3_PURGE="true"
 AWG3_SUBNET_OCTET_MIN=33
 AWG3_SUBNET_OCTET_MAX=188
 
-AWG3_KEEPALIVE="12"
-
-readonly AWG3_PROTOCOL="3.0"
-
 # device/noise-types.go: HeaderCipherNonceSize. При включённой защите заголовка
 # nonce читается из первых NONCE_SIZE байт padding'а, поэтому S1-S4 не могут быть короче.
 readonly AWG3_NONCE_SIZE=12
@@ -46,10 +45,16 @@ readonly AWG3_S4_MAX=32
 
 ### Умолчания:
 ##############
+#-> Обуфксация:
+AWG3_DEFAULT_PROFILE="dtls"
+AWG3_DEFAULT_INTENSITY="medium"
+AWG3_DEFAULT_ROUTER_MODE=0
+
 #-> Клиент:
 AWG3_DEFAULT_ADDRESS="10.31.31.1/24"
 AWG3_DEFAULT_ALLOWED_IPS="0.0.0.0/0"
 AWG3_DEFAULT_DNS="8.8.4.4, 1.0.0.1"
+AWG3_DEFAULT_KEEPALIVE="12"
 
 #-> Файрволл:
 AWG3_DEFAULT_FW_POLICY="GW-VPN-to-world"
@@ -61,11 +66,12 @@ AWG3_DEFAULT_FW_ZONE="VPN-clients"
 #-> Если 1 server-init будет игнорировать наличие имеющегося конфига:
 AWG3_SRV_FORCE=0
 #-> Пустой AWG3_SRV_PORT означает «выбрать случайный»: предсказуемый порт сам по себе является признаком.
-AWG3_DEFAULT_PORT="31031"
-AWG3_DEFAULT_SUBNET="10.31.31.1/24"
-AWG3_DEFAULT_MTU="1320"
+AWG3_DEFAULT_PORT=""
+AWG3_DEFAULT_SUBNET="10.10.10.1/24"
+AWG3_DEFAULT_MTU="1360"
 AWG3_DEFAULT_ISOLATION="off"
 AWG3_DEFAULT_IPV6="off"
+AWG3_DEFAULT_IPV6_TUNNEL="off"
 AWG3_DEFAULT_IPV6_SUBNET="fddd:2c4:2c4:2c4::/64"
 
 #-> Далее от другого скрипта, но это не точно

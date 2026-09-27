@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+
 #########################
 ### Заголовок скрипта ###
 #-> AWG Multi Tools: предстартовые проверки:
@@ -8,14 +9,14 @@
 if [ -z "$BASH_VERSION" ]; then echo "Запустите через bash: bash $0!" >&2; exit 1; fi
 
 #PS4 для красивой трассировки (в начале скрипта):
-#export PS4='+ ${BASH_SOURCE}:${LINENO}: ${FUNCNAME[0]:-main}() '
 #Теперь set -x покажет файл, номер строки и имя функции — почти как нормальный отладчик.
-#set -x
+#[[ "${dbg}" -eq 1 ]] && export PS4='+ ${BASH_SOURCE}:${LINENO}: ${FUNCNAME[0]:-main}() '; set -x || true
+#[[ "${dbg}" -eq 2 ]] && shellcheck -x || true
 
 # -E нужен, чтобы ERR-ловушка отката работала и внутри функций.
 #set -Eeuo pipefail
 #set -euo pipefail
-set -o pipefail
+#set -o pipefail
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 PROJ_ROOT_DIR=${SELF%/*}
@@ -28,12 +29,14 @@ me="${me_ext%.*}"
 
 #-> Подключаем инклюды:
 #######################
+#-> Подключаем файл с секретами
 source $env_inc
+source $secure_inc
 source $colors_inc
 source $output_inc
 source $input_inc
 source $functions_inc
-source $firewall_inc
+source $firewalld_inc
 
 #-> Проверка root:
 ##################

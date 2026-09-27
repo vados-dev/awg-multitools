@@ -6,12 +6,16 @@
 ### порядок папок важен: header первый, entry последний
 ########################################################
 
-set -Eeuo pipefail
+#set -Eeuo pipefail
+set -o pipefail
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 BUILD_DIR=${SELF%/*}
 source "${BUILD_DIR}/include/.${BUILD_DIR##*/}-env"
 source $colors_inc
+
+#echo "${BUILD_DIR}/include/.${BUILD_DIR##*/}-env"
+#exit 0
 
 str_replace(){
     local rep_file=$(<$1)
@@ -20,8 +24,6 @@ str_replace(){
     rep_file="${rep_file//$rep_str/$new_str}"
     printf "%s\n" "$rep_file"
 }
-
-
 
 #-> Сборка меню:
 add_menu_files() {
@@ -101,7 +103,7 @@ build_modules() {
                     if [[ "$line" != "#!/"* ]]; then
                         #-> Заменяем #<::PROJ_WORK_DIR::> на реальную переменную:
                         if [[ "$line" == "#<::PROJ_WORK_DIR::>" ]]; then
-                            printf "PROJ_WORK_DIR=\"%s\"\n" "$PROJ_WORK_DIR"
+                            printf "PROJ_WORK_DIR=\"%s\"\n" "${PROJ_WORK_DIR}"
                         else
                             printf "%s\n" "$line"
                         fi
@@ -120,6 +122,7 @@ DIRS=(
     "02_install"
     "03_awg2"
     "04_awg3"
+    "06_warp"
     "08_nmcli"
     "15_utils"
     "90_main"
@@ -129,13 +132,13 @@ DIRS=(
 cecho sW "Сборка "; cecho sM "${app_name} "; cecho sY "${app_version}"; cecho sW "...\n"
 
 #-> Начинаем с shebang:
-printf '#!/usr/bin/env bash\n\n' > "$MAIN_SCRIPT"
-printf '##########################################################\n' >> "$MAIN_SCRIPT"
-printf "### ${pr_descr}\n" >> "$MAIN_SCRIPT"
-printf "#-> ${app_name} ${app_version}\n" >> "$MAIN_SCRIPT"
-printf "#-> Git-Hub: ${github_url}${pr_owner}/${repo_name}/\n" >> "$MAIN_SCRIPT"
-printf "#-> Собран: $(date -u +'%Y-%m-%d %H:%M:%S %Z')\n" >> "$MAIN_SCRIPT"
-printf '##########################################################\n\n' >> "$MAIN_SCRIPT"
+printf '#!/usr/bin/env bash\n\n' > "${MAIN_SCRIPT}"
+printf '##########################################################\n' >> "${MAIN_SCRIPT}"
+printf "### ${pr_descr}\n" >> "${MAIN_SCRIPT}"
+printf "#-> ${app_name} ${app_version}\n" >> "${MAIN_SCRIPT}"
+printf "#-> Git-Hub: ${github_url}${pr_owner}/${repo_name}/\n" >> "${MAIN_SCRIPT}"
+printf "#-> Собран: $(date -u +'%Y-%m-%d %H:%M:%S %Z')\n" >> "${MAIN_SCRIPT}"
+printf '##########################################################\n\n' >> "${MAIN_SCRIPT}"
 
 TOTAL_LINES=0
 MISSING=0
@@ -150,11 +153,9 @@ for d in "${DIRS[@]}"; do
         MISSING=$((MISSING + 1))
         continue
     fi
-build_modules "${d}" "" >> "$MAIN_SCRIPT"
-build_menu "${d}" "" >> "$MAIN_SCRIPT"
+build_modules "${d}" "" >> "${MAIN_SCRIPT}"
+build_menu "${d}" "" >> "${MAIN_SCRIPT}"
 done
-
-exit 0
 
 for f in "${FILES[@]}"; do
     src="${SRC_DIR}/${f}"
@@ -167,20 +168,20 @@ for f in "${FILES[@]}"; do
     lines=$(wc -l < "$src")
     TOTAL_LINES=$((TOTAL_LINES + lines))
 
-    echo "" >> "$MAIN_SCRIPT"
-    echo "# === ${f} ===" >> "$MAIN_SCRIPT"
+    echo "" >> "${MAIN_SCRIPT}"
+    echo "# === ${f} ===" >> "${MAIN_SCRIPT}"
 
     # - пропускаем shebang из модулей, он уже есть в начале -
     if head -1 "$src" | grep -q '^#!/'; then
-        tail -n +2 "$src" >> "$MAIN_SCRIPT"
+        tail -n +2 "$src" >> "${MAIN_SCRIPT}"
     else
-        cat "$src" >> "$MAIN_SCRIPT"
+        cat "$src" >> "${MAIN_SCRIPT}"
     fi
 
     echo "  [OK] ${f} (${lines} строк)"
 done
 
-chmod +x "$MAIN_SCRIPT"
+chmod +x "${MAIN_SCRIPT}"
 
 echo ""
 echo "Готово: ${MAIN_SCRIPT}"

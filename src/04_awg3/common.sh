@@ -397,59 +397,66 @@ awg3_backup() {
 # TCPMSS-clamping обязателен: путь до клиента уже съеден заголовками туннеля и без правки MSS TCP-сессии зависают на больших пакетах там,
 # где PMTUD упирается в чёрную дыру — та самая жалоба «ping идёт, а сайт не грузится».
 #-> awg3_build_postup NIC MTU ISOLATION IPV6   (ISOLATION/IPV6: on|off):
+#-> awg3_build_postup NIC MTU ZONE ISOLATION IPV6 (ISOLATION/IPV6: on|off):
 awg3_build_postup() {
-    local nic="$1" mtu="$2" isolation="$3" ipv6="$4"
+    local nic="$1" mtu="$2" zone="$3" isolation="$4" ipv6="$5"
     local mss4=$(( mtu - 40 )) mss6=$(( mtu - 60 ))
     local r
-    r="iptables -I FORWARD -i %i -j ACCEPT"
-    r="${r}; iptables -t nat -A POSTROUTING -o ${nic} -j MASQUERADE"
-    r="${r}; iptables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss4}"
-    r="${r}; iptables -t mangle -A FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss4}"
+
+    r="firewall-cmd --permanent --new-zone=${zone} 2>/dev/null || true"
+    r="${r}; firewall-cmd --permanent --zone=${zone} --add-interface=%i 2>/dev/null || true"
+    r="${r}; firewall-cmd --permanent --zone=${zone} --set-target=ACCEPT"
+    # Forwarding awg0 → %i (ответный трафик к клиентам туннеля)
+    r="${r}; firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i awg0 -o %i -j ACCEPT"
+    r="${r}; firewall-cmd --permanent --zone=${zone} --add-masquerade"
+    r="${r}; firewall-cmd --permanent --zone=${zone} --add-rich-rule='rule family=\"ipv4\" tcp-mss-clamp value=${mss4}'"
+
     if [[ "$isolation" == "on" ]]; then
-        # Цикл, а не одиночное -D: прерванный прошлый запуск мог оставить несколько одинаковых правил, снять нужно все.
-        r="${r}; while iptables -D FORWARD -i %i -o %i -j DROP 2>/dev/null; do :; done"
-        r="${r}; iptables -I FORWARD -i %i -o %i -j DROP"
+        r="${r}; firewall-cmd --permanent --direct --add-rule ipv4 filter FORWARD 0 -i %i -o %i -j DROP"
     fi
 
     if [[ "$ipv6" == "on" ]]; then
-        r="${r}; ip6tables -I FORWARD -i %i -j ACCEPT"
-        r="${r}; ip6tables -t nat -A POSTROUTING -o ${nic} -j MASQUERADE"
-        r="${r}; ip6tables -t mangle -A FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss6}"
-        r="${r}; ip6tables -t mangle -A FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss6}"
+        r="${r}; firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -i awg0 -o %i -j ACCEPT"
+        r="${r}; firewall-cmd --permanent --direct --add-rule ipv6 nat POSTROUTING 0 -o ${nic} -j MASQUERADE"
+        r="${r}; firewall-cmd --permanent --zone=${zone} --add-rich-rule='rule family=\"ipv6\" tcp-mss-clamp value=${mss6}'"
         if [[ "$isolation" == "on" ]]; then
-            r="${r}; while ip6tables -D FORWARD -i %i -o %i -j DROP 2>/dev/null; do :; done"
-            r="${r}; ip6tables -I FORWARD -i %i -o %i -j DROP"
+            r="${r}; firewall-cmd --permanent --direct --add-rule ipv6 filter FORWARD 0 -i %i -o %i -j DROP"
         fi
     fi
 
+    r="${r}; firewall-cmd --reload"
     printf '%s' "$r"
 }
 
-#-> awg3_build_postdown NIC MTU ISOLATION IPV6 — зеркало awg3_build_postup.
-# DROP снимается с `|| true`: интерфейс может опускаться после того, как правило уже убрали вручную, и падать на этом PostDown не должен.
+#-> awg3_build_postdown NIC MTU ZONE ISOLATION IPV6 — зеркало awg3_build_postup.
+# 2>/dev/null || true везде: интерфейс может опуститься раньше, и падать на этом PostDown не должен.
 awg3_build_postdown() {
-    local nic="$1" mtu="$2" isolation="$3" ipv6="$4"
+    local nic="$1" mtu="$2" zone="$3" isolation="$4" ipv6="$5"
     local mss4=$(( mtu - 40 )) mss6=$(( mtu - 60 ))
     local r
-    r="iptables -D FORWARD -i %i -j ACCEPT"
-    r="${r}; iptables -t nat -D POSTROUTING -o ${nic} -j MASQUERADE"
-    r="${r}; iptables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss4}"
-    r="${r}; iptables -t mangle -D FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss4}"
+
+    r="firewall-cmd --permanent --zone=${zone} --remove-interface=%i 2>/dev/null || true"
+    r="${r}; firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -i awg0 -o %i -j ACCEPT 2>/dev/null || true"
+    r="${r}; firewall-cmd --permanent --zone=${zone} --remove-masquerade 2>/dev/null || true"
+    r="${r}; firewall-cmd --permanent --zone=${zone} --remove-rich-rule='rule family=\"ipv4\" tcp-mss-clamp value=${mss4}' 2>/dev/null || true"
+
     if [[ "$isolation" == "on" ]]; then
-        r="${r}; iptables -D FORWARD -i %i -o %i -j DROP 2>/dev/null || true"
+        r="${r}; firewall-cmd --permanent --direct --remove-rule ipv4 filter FORWARD 0 -i %i -o %i -j DROP 2>/dev/null || true"
     fi
+
     if [[ "$ipv6" == "on" ]]; then
-        r="${r}; ip6tables -D FORWARD -i %i -j ACCEPT"
-        r="${r}; ip6tables -t nat -D POSTROUTING -o ${nic} -j MASQUERADE"
-        r="${r}; ip6tables -t mangle -D FORWARD -o %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss6}"
-        r="${r}; ip6tables -t mangle -D FORWARD -i %i -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss ${mss6}"
+        r="${r}; firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -i awg0 -o %i -j ACCEPT 2>/dev/null || true"
+        r="${r}; firewall-cmd --permanent --direct --remove-rule ipv6 nat POSTROUTING 0 -o ${nic} -j MASQUERADE 2>/dev/null || true"
+        r="${r}; firewall-cmd --permanent --zone=${zone} --remove-rich-rule='rule family=\"ipv6\" tcp-mss-clamp value=${mss6}' 2>/dev/null || true"
         if [[ "$isolation" == "on" ]]; then
-            r="${r}; ip6tables -D FORWARD -i %i -o %i -j DROP 2>/dev/null || true"
+            r="${r}; firewall-cmd --permanent --direct --remove-rule ipv6 filter FORWARD 0 -i %i -o %i -j DROP 2>/dev/null || true"
         fi
     fi
+
+    r="${r}; firewall-cmd --permanent --delete-zone=${zone} 2>/dev/null || true"
+    r="${r}; firewall-cmd --reload"
     printf '%s' "$r"
 }
-
 
 ### Далее — функции установки и проверки зависимостей, вызываются при установке и обновлении.
 #-> missing_tools -> список отсутствующих команд через пробел.

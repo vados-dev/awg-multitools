@@ -130,11 +130,11 @@ log()         { log_msg "info" "$*"; }
 log_ok()      { log_msg "ok" "$*"; }
 log_confirm() { log_msg "confirmed"; }
 log_cancel()  { log_msg "cancelled"; }
-log_warn()    { log_msg "warning" "$*" >&2; }
+log_warn()    { log_msg "warning" "$*"; >&2; }
 log_save()    { log_msg "save" "$*"; }
 log_delete()  { log_msg "delete" "$*"; }
-log_error()   { log_msg "error" "$*" >&2; }
-log_debug()   { log_msg "debug" "$*" >&2; }
+log_error()   { log_msg "error" "$*"; >&2; }
+log_debug()   { log_msg "debug" "$*"; >&2; }
 die()         { log_error "Сдохла: $*"; [[ "${DEFAULT_LOG}" != ""  ]] && ${SAVE_LOG}; log_error "Лог: $DEFAULT_LOG" && exit 1 || exit 1; }
 
 print_info()    { log "$*"; }
@@ -225,31 +225,26 @@ print_line() {
     done
     printf "\n"
 }
-dashes=$(print_line ─ $COLS_NUM)
-equals=$(print_line ═ $COLS_NUM)
-big_dashes=$(print_line ━ $COLS_NUM)
-big_dashes() {
-    NUM="0"
-    while [ "$NUM" -lt "$1" ]; do
-        printf "━"
-        NUM=$((NUM + 1))
-    done
-    printf "\n"
+dashes="$(print_line ─ $COLS_NUM)"
+equals="$(print_line ═ $COLS_NUM)"
+big_dashes="$(print_line ━ $COLS_NUM)"
 
+ok_box() {
+    local ok=$(log_ok "$*") line="$(cecho sG ${dashes})"
+    printf "    %s\n" "$(align::left $COLS_NUM "$line")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$ok")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$line")"
 }
-
-# Рамка успеха: ширина $COLS_NUM, текст по центру
-success_box() {
-  echo -e "$(cecho sG ${dashes})"
-  printf "    $sym_ok $(cecho sW '%s')\n" "$(align::left $COLS_NUM "$*")"
-  echo -e "$(cecho sG ${dashes})"
-}
-
-# Рамка неудачи: ширина $COLS_NUM, текст по центру
+alias success_box="$(ok_box)"
 failure_box() {
-  echo -e "$(cecho sR ${dashes})"
-  printf "    $sym_err $(cecho sW '%s')\n" "$(align::left $COLS_NUM "$*")"
-  echo -e "$(cecho sR ${dashes})"
+    local err=$(log_error "$*") line="$(cecho Rs ${dashes})"
+    printf "    %s\n" "$(align::left $COLS_NUM "$line")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$err")"
+}
+warning_box() {
+    local warn=$(log_warn "$*") line="$(cecho Ys ${dashes})"
+    printf "    %s\n" "$(align::left $COLS_NUM "$line")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$warn")"
 }
 
 print_banner() {

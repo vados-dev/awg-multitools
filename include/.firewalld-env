@@ -1,0 +1,519 @@
+# firewalld management — env-файл с функциями-обёртками над firewall-cmd
+# Подразумевает наличие: success_box, failure_box, log_error, log_debug, cecho
+#############################################################################
+# Примеры вызовов:
+#-> Создать зону с описанием
+# FW_Zone --new myzone "My Zone" "Для тестов"
+#-> Добавить сервис в зону
+# FW_Service --add public http
+#-> Добавить порт
+# FW_Port --add public 8080 tcp
+#-> Проверить, открыт ли порт 80/tcp где-либо
+# FW_Port --check "" 80 tcp
+#-> Добавить rich rule
+# FW_RichRule --add public 'rule family="ipv4" source address="192.168.1.0/24" accept'
+#-> Включить masquerade
+# FW_Masquerade --add public
+#-> Проброс порта
+# FW_Forward --add public 80 tcp 8080 192.168.1.100
+#-> Создать IPSet
+# FW_IPSet --new blacklist hash:ip
+# FW_IPSet --add-entry blacklist 1.2.3.4
+#-> Panic mode
+# FW_Panic --on
+
+### Переменные
+########################################
+FW_RUN="${FW_RUN:-$(command -v firewall-cmd 2>/dev/null)}"
+perm="--permanent"
+allReload=0
+
+### Базовая обёртка: выполняет firewall-cmd, печатает ошибки, рамки по итогу
+########################################
+fw() {
+  local output
+  output=$($FW_RUN "$@" 2>&1)
+  # Если это не чистый "success" — показываем вывод (ошибки/предупреждения)
+  [[ "$output" != "success" ]] && echo "$output"
+  # Проверяем успех и рамку
+  if echo "$output" | grep -q 'success'; then
+    success_box "$FW_RUN $*"
+  else
+    log_error "${FW_RUN}\n$*\n${output}"
+  fi
+}
+
+# Сокращение для reload
+fwreload() { fw --reload; }
+# Полный reload (сбрасывает также ICMP-настройки)
+fwreload_full() { fw --complete-reload; }
+
+# Перенос runtime → permanent (если правило добавлено только в runtime)
+fwruntime2perm() { fw --runtime-to-permanent; }
+
+### Проверки
+########################################
+
+# Проверить порт везде: прямые порты + порты внутри сервисов, runtime + permanent
+FW_check_port() {
+  local port="$1" found=1
+  for mode in "" "$perm"; do
+    for zone in $($FW_RUN $mode --get-zones 2>/dev/null); do
+      # Прямой порт в зоне
+      if $FW_RUN $mode --zone="$zone" --list-ports 2>/dev/null | grep -qw "$port"; then
+        found=0; break 2
+      fi
+      # Порт внутри сервиса
+      for svc in $($FW_RUN $mode --zone="$zone" --list-services 2>/dev/null); do
+        if $FW_RUN $mode --service="$svc" --get-ports 2>/dev/null | grep -qw "$port"; then
+          found=0; break 3
+        fi
+      done
+    done
+  done
+  return "$found"
+}
+
+# Проверить сервис везде (runtime + permanent)
+FW_check_service() {
+  local svc="$1" found=1
+  for mode in "" "$perm"; do
+    for zone in $($FW_RUN $mode --get-zones 2>/dev/null); do
+      $FW_RUN $mode --zone="$zone" --list-services | grep -oq "$svc" 2>/dev/null && found=0; break 2 || found=1; break
+    done
+  done
+  return "$found"
+}
+
+# Проверить интерфейс в зоне (runtime + permanent)
+FW_check_interface() {
+  local iface="$1" found=1
+  for mode in "" "$perm"; do
+    for zone in $($FW_RUN $mode --get-zones 2>/dev/null); do
+      if $FW_RUN $mode --zone="$zone" --list-interfaces 2>/dev/null | grep -qw "$iface"; then
+        found=0; break 2
+      fi
+    done
+  done
+  return "$found"
+}
+
+# Проверить source IP/подсеть в зонах (runtime + permanent)
+FW_check_source() {
+  local src="$1" found=1
+  for mode in "" "$perm"; do
+    for zone in $($FW_RUN $mode --get-zones 2>/dev/null); do
+      if $FW_RUN $mode --zone="$zone" --list-sources 2>/dev/null | grep -qw "$src"; then
+        found=0; break 2
+      fi
+    done
+  done
+  return "$found"
+}
+
+#-> FW_Direct — универсальный direct rule
+FW_Direct() {
+  local action="$1" family="$2" table="$3" chain="$4" prio="$5"
+  shift 5
+  case "$action" in
+    --add)
+      $fw $perm --direct --add-rule "$family" "$table" "$chain" "$prio" "$@"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      $fw $perm --direct --remove-rule "$family" "$table" "$chain" "$prio" "$@" 2>/dev/null || true
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    *)
+      echo "Использование: FW_Direct <--add|--remove> <ipv4|ipv6> <table> <chain> <prio> <rule...>"
+      return 1
+      ;;
+  esac
+}
+
+
+### Зоны
+########################################
+# Действия: --new, --delete, --info, --list, --get-zones, --get-default, --get-active, --set-default
+# --get:
+# FW_Zone --get zones
+# FW_Zone --get default
+# FW_Zone --get active
+# FW_Zone --get interface eth0
+# FW_Zone --get source 192.168.1.0/24
+FW_Zone() {
+  local action="$1" name="$2" short="$3" desc="$4" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --new)
+      fw $perm --new-zone="$name"
+      [[ -n "$short" ]] && fw $perm --zone="$name" --set-short="$short"
+      [[ -n "$desc"  ]] && fw $perm --zone="$name" --set-description="$desc"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --delete)
+      fw $perm --delete-zone="$name"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --info)
+      fw $perm --info-zone="${name:-public}"
+      ;;
+    --list)
+      if [[ -n "$name" ]]; then
+        fw --list-all-zones | sed -n "/^${name}/,/^$/p"
+      else
+        fw --list-all-zones
+      fi
+      ;;
+    --get)
+      local subcmd="$name"   # $2
+      case "$subcmd" in
+        zones)
+          fw --get-zones
+          ;;
+        default)
+          fw --get-default-zone
+          ;;
+        active)
+          fw --get-active-zones
+          ;;
+        interface)
+          fw --get-zone-of-interface="$short"   # $3 = имя интерфейса
+          ;;
+        source)
+          fw --get-zone-of-source="$short"      # $3 = IP/подсеть
+          ;;
+        *)
+          echo "Использование: FW_Zone --get <zones|default|active|interface|source> [имя]"
+          return 1
+47          ;;
+      esac
+      ;;
+    --set-default)
+      fw $perm --set-default-zone="${name:-public}"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    *)
+      echo "Использование: FW_Zone <--new|--delete|--info|--list|--get-zones|--get-default|--get-active|--set-default> [имя] [short] [desc]"
+      return 1
+      ;;
+  esac
+}
+
+### Сервисы
+########################################
+# Действия: --add, --remove, --list, --info, --new, --delete, --add-port, --remove-port, --set-short, --set-desc
+FW_Service() {
+  local action="$1" zone="$2" svc="$3" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+
+  case "$action" in
+    --add)
+      fw $perm --zone="$zone" --add-service="$svc"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      fw $perm --zone="$zone" --remove-service="$svc"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list)
+      fw --zone="${zone:-public}" --list-services
+      ;;
+    --info)
+      fw --info-service="${svc:-http}"
+      ;;
+    --get-all)
+      fw --get-services
+      ;;
+    --new)
+      fw $perm --new-service="$svc"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --delete)
+      fw $perm --delete-service="$svc"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --add-port)
+      fw $perm --service="$svc" --add-port="$4"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove-port)
+      fw $perm --service="$svc" --remove-port="$4"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --set-short)
+      fw $perm --service="$svc" --set-short="$4"
+      ;;
+    --set-desc)
+      fw $perm --service="$svc" --set-description="$4"
+      ;;
+    *)
+      echo "Использование: FW_Service <--add|--remove|--list|--info|--get-all|--new|--delete|--add-port|--remove-port|--set-short|--set-desc> [zone] [service] [доп.арг]"
+      return 1
+      ;;
+  esac
+}
+
+### Порты
+########################################
+# Действия: --add, --remove, --list, --check
+FW_Port() {
+  local action="$1" zone="$2" port="$3" proto="$4" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --add)
+      fw $perm --zone="$zone" --add-port="${port}/${proto}"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      fw $perm --zone="$zone" --remove-port="${port}/${proto}"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list)
+      fw --zone="${zone:-public}" --list-ports
+      ;;
+    --check)
+      if FW_check_port "${port}/${proto}"; then
+        success_box "Порт ${port}/${proto} найден"
+      else
+        failure_box "Порт ${port}/${proto} не найден"
+      fi
+      ;;
+    *)
+      echo "Использование: FW_Port <--add|--remove|--list|--check> [zone] [port] [tcp|udp]"
+      return 1
+      ;;
+  esac
+}
+
+### Интерфейсы:
+###############
+# Действия: --add, --remove, --list, --change
+FW_Iface() {
+  local action="$1" zone="$2" iface="$3" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --add)
+      fw $perm --zone="$zone" --add-interface="$iface"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      fw $perm --zone="$zone" --remove-interface="$iface"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list)
+      fw --zone="${zone:-public}" --list-interfaces
+      ;;
+    --change)
+      fw $perm --zone="$zone" --change-interface="$iface"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    *)
+      echo "Использование: FW_Interface <--add|--remove|--list|--change> [zone] [interface]"
+      return 1
+      ;;
+  esac
+}
+
+### Sources (IP/подсети)
+########################################
+# Действия: --add, --remove, --list, --check
+FW_Source() {
+  local action="$1" zone="$2" src="$3" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --add)
+      fw $perm --zone="$zone" --add-source="$src"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      fw $perm --zone="$zone" --remove-source="$src"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list)
+      fw --zone="${zone:-public}" --list-sources
+      ;;
+    --check)
+      if FW_check_source "$src"; then
+        success_box "Source $src найден"
+      else
+        failure_box "Source $src не найден"
+      fi
+      ;;
+    *)
+      echo "Использование: FW_Source <--add|--remove|--list|--check> [zone] [source]"
+      return 1
+      ;;
+  esac
+}
+
+### Rich rules:
+###############
+# Действия: --add, --remove, --list, --check
+FW_Rich() {
+  local action="$1" zone="$2" rule="$3" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --add)
+      fw $perm --zone="$zone" --add-rich-rule="$rule"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      fw $perm --zone="$zone" --remove-rich-rule="$rule"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list)
+      fw --zone="${zone:-public}" --list-rich-rules
+      ;;
+    --check)
+      fw $perm --zone="$zone" --query-rich-rule="$rule"
+      ;;
+    *)
+      echo "Использование: FW_RichRule <--add|--remove|--list|--check> [zone] [rule]"
+      return 1
+      ;;
+  esac
+}
+
+### Masquerade (NAT):
+#####################
+# Действия: --add, --remove, --query, --list
+FW_Nat() {
+  local action="$1" zone="$2" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --add)
+      fw $perm --zone="${zone:-public}" --add-masquerade
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      fw $perm --zone="${zone:-public}" --remove-masquerade
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --query)
+      fw $perm --zone="${zone:-public}" --query-masquerade
+      ;;
+    *)
+      echo "Использование: FW_Masquerade <--add|--remove|--query> [zone]"
+      return 1
+      ;;
+  esac
+}
+
+### Forward ports (проброс портов):
+###################################
+# Действия: --add, --remove, --list
+# Формат: port=proto:toaddr:toport
+FW_Forward() {
+  local action="$1" zone="$2" port="$3" proto="$4" toport="$5" toaddr="$6" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --add)
+      local fwd="port=${port}:${proto}"
+      [[ -n "$toport"  ]] && fwd+=":toport=${toport}"
+      [[ -n "$toaddr"  ]] && fwd+=":toaddr=${toaddr}"
+      fw $perm --zone="${zone:-public}" --add-forward-port="$fwd"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove)
+      local fwd="port=${port}:${proto}"
+      [[ -n "$toport"  ]] && fwd+=":toport=${toport}"
+      [[ -n "$toaddr"  ]] && fwd+=":toaddr=${toaddr}"
+      fw $perm --zone="${zone:-public}" --remove-forward-port="$fwd"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list)
+      fw --zone="${zone:-public}" --list-forward-ports
+      ;;
+    *)
+      echo "Использование: FW_Forward <--add|--remove|--list> [zone] [port] [tcp|udp] [toport] [toaddr]"
+      return 1
+      ;;
+  esac
+}
+
+### IPSet:
+##########
+# Действия: --new, --delete, --add-entry, --remove-entry, --list-entries, --get-types
+FW_IPSet() {
+  local action="$1" name="$2" type="$3" entry="$4" dbg="${DBG:-0}"
+  [ "$dbg" -eq 1 ] && log_debug "$? $*"
+  case "$action" in
+    --new)
+      fw $perm --new-ipset="$name" --type="$type"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --delete)
+      fw $perm --delete-ipset="$name"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --add-entry)
+      fw $perm --ipset="$name" --add-entry="$entry"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --remove-entry)
+      fw $perm --ipset="$name" --remove-entry="$entry"
+      [[ "$allReload" -eq 1 ]] && fwreload || true
+      ;;
+    --list-entries)
+      fw --ipset="$name" --get-entries
+      ;;
+    --get-types)
+      fw --get-ipset-types
+      ;;
+    *)
+      echo "Использование: FW_IPSet <--new|--delete|--add-entry|--remove-entry|--list-entries|--get-types> [name] [type] [entry]"
+      return 1
+      ;;
+  esac
+}
+
+### FW_Set_MSS:
+###############
+# Использование:
+# FW_Set_MSS                    # pmtu (авто), зона public
+# FW_Set_MSS internal           # pmtu (авто), зона internal
+# FW_Set_MSS public 1380        # фиксированный MSS=1380, зона public
+# FW_Set_MSS VPN-clients 1360    # для VPN-зоны
+
+FW_Set_MSS() {
+  local zone="${1:-public}"
+  local mss="$2"   # пусто = pmtu (авто), число = фиксированный MSS
+  local rule='rule tcp-mss-clamp'
+  [[ -n "$mss" ]] && rule="rule tcp-mss-clamp value=$mss"
+  fw $perm --zone="$zone" --add-rich-rule="$rule"
+  fwreload
+  if [[ -n "$mss" ]]; then
+    success_box "MSS=$mss в зоне $zone"
+  else
+    success_box "MSS=pmtu (авто) в зоне $zone"
+  fi
+}
+
+### Panic mode
+########################################
+FW_Panic() {
+  local action="$1"
+  case "$action" in
+    --on)  fw --panic-on  ;;
+    --off) fw --panic-off ;;
+    --query) fw --query-panic ;;
+    *) echo "Использование: FW_Panic <--on|--off|--query>"; return 1 ;;
+  esac
+}
+
+### Логи и состояние
+########################################
+FW_State() {
+  local action="${1:---state}"
+  case "$action" in
+    --state)      fw --state ;;
+    --list-all)   fw --zone="${2:-public}" --list-all ;;
+    --list-all-zones) fw --list-all-zones ;;
+    --get-default) fw --get-default-zone ;;
+    *)
+      echo "Использование: FW_State <--state|--list-all [zone]|--list-all-zones|--get-default>"
+      return 1
+      ;;
+  esac
+}

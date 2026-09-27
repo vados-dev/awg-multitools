@@ -1,0 +1,11 @@
+nmcli_show_conn
+nmcli_show_devices
+nmtui
+nmcli_import_con
+nmcli_create_con
+nmcli_remove_con
+nmcli_up
+nmcli_down
+nmcli_add2zone
+nmcli_delFromZone
+nmcli_show_env

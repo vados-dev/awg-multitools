@@ -1,0 +1,158 @@
+### Переменные для управления firewalld:
+########################################
+# Альяс команды firewall-cmd
+FW_RUN=$(which firewall-cmd)
+#-> Основные команды:
+fw() {
+  local output; output=$($FW_RUN "$@" 2>&1);
+  ! [[ "$output" == "success" ]] && echo "$output"
+  echo "$output" | grep -q 'success' && success_box "$FW_RUN $* $(cecho Gs 'success')." || log_error "${FW_RUN}\n$*\n${output}!"
+}
+fwreload() { fw --reload; }
+
+# Ещё альясы
+perm="--permanent"
+rr="-rich-rules"
+
+#-> Аргументы для обработки:
+#arg1=${1:-""}; arg2=${2:-""}; arg3=${3:-""}; arg4=${4:-""};
+
+### функции проверок:
+#####################
+fw_check_xml() { ! command -v grep "error" | /etc/firewalld/tools/check.sh >&2 || return 1; }
+
+#show_command() { printf "    $(cecho Ws "Запуск") $(cecho Gs '%s') $(cecho Ws 'c аргументами: [') $(cecho Ys '%s')$(cecho Ws '].')\n" "$*" "$@"; }
+
+### функции:
+############
+FW_lst() {
+    local what="$1" name="$2"
+    [[ "$#" == 1 ]] && fw "${lst}${what}"
+    [[ "$#" == 2 ]] && fw "${lst}${what}${name}"
+}
+
+#FW_Zone_check() {
+#    fw --get-active-zones | grep '^[^ ]' | xargs -I {} firewall-cmd --permanent --info-zone {} #grep '^[^ ]'
+#}
+
+
+#FW_check_port() { while IFS= read -r z; do fw --zone="$z" --list-ports; done < <(fw --get-zones) | grep -qx "$1"; }
+
+#FW_check_port() { $FW_RUN --get-zones | xargs -n1 $FW_RUN --zone={} --list-ports | grep -qx "$1" && return 0 || return 1; }
+#FW_check_port_perm() { $FW_RUN ${perm} --get-zones | xargs -n1 $FW_RUN ${perm} --zone={} --list-ports | grep -qx "$1" && return 0 || return 1; }
+
+FW_check_port_perm() {
+  local port="$1" found=1
+  while IFS= read -r zone; do
+    if firewall-cmd --permanent --zone="$zone" --list-ports 2>/dev/null | grep -qx "$port"; then
+      found=0
+      break
+    fi
+  done < <(firewall-cmd --permanent --get-zones 2>/dev/null)
+  return "$found"
+}
+
+
+1FW_check_port() {
+  local port="$1"
+  local found=1
+  # 1. Проверяем runtime (текущие правила)
+  for zone in $(${FW_RUN} --get-zones 2>/dev/null); do
+    if ${FW_RUN} --zone="$zone" --list-ports 2>/dev/null | grep -qx "$port"; then
+      found=0
+      break
+    fi
+  done
+  # Если уже нашли — можно не проверять permanent
+  [[ $found -eq 0 ]] && return 0
+  # 2. Если не нашли в runtime — проверяем permanent (сохранённые правила)
+  for zone in $(firewall-cmd ${perm} --get-zones 2>/dev/null); do
+    if ${FW_RUN} ${perm} --zone="$zone" --list-ports 2>/dev/null | grep -qx "$port"; then
+      found=0
+      break
+    fi
+  done
+  return "$found"
+}
+
+FW_check_port() {
+  local port="$1" found=1
+  # Проверяем и runtime, и permanent
+  for mode in "" "${perm}"; do
+    for zone in $(${FW_RUN} $mode --get-zones 2>/dev/null); do
+      # 1. Прямой порт в зоне
+      if ${FW_RUN} $mode --zone="$zone" --list-ports 2>/dev/null | grep -qw "$port"; then
+        found=0
+        break 2
+      fi
+      # 2. Порт внутри сервиса
+      for svc in $(${FW_RUN} $mode --zone="$zone" --list-services 2>/dev/null); do
+        if ${FW_RUN} $mode --service="$svc" --get-ports 2>/dev/null | grep -qw "$port"; then
+          found=0
+          break 3
+        fi
+      done
+    done
+  done
+  return "$found"
+}
+
+
+FW_Zone() {
+    local action="$1" name="$2" short="$3" desc="$4" dbg=1
+    [ "$dbg" -eq 1 ] && log_debug "$? $*"
+    if [[ "$action" = "--delete" ]]; then
+        fw ${perm} "${action}-zone=${name}" || true
+        fwreload
+    fi
+    if [[ "$action" = "--new" ]]; then
+        fw ${perm} "${action}-zone=${name}" || true
+        if [[ "$short" != "" ]]; then
+            fw ${perm} "--zone=${name}" "--set-short=${short}"
+        fi
+        if [[ "$desc" != "" ]]; then
+            fw ${perm} "--zone=${name}" "--set-description=${desc}"
+        fi
+        fwreload
+    fi
+    if [[ "$action" = "--list" ]]; then
+        if [[ "$name" != "" ]]; then
+            fw --list-zone="$name"
+        else
+            fw "--list-$*"
+        fi
+    fi
+    if [[ "$action" = "--get" ]]; then
+        if [[ "$name" != "" ]]; then
+            fw --get-zone="$name"
+        else
+            fw --get$*
+        fi
+    fi
+}
+
+function list-all {
+  ${fwcmd} $lst$rr
+  firewall-cmd --get-active-zones
+  firewall-cmd --get-default-zone
+  firewall-cmd --get-zones
+  return=$?
+}
+
+
+#
+#if [ "$fwrun" = "" ] || [ ! "$fwrun" ] || [ "$fwrun" != $(which firewall-cmd) ]; then export fwrun=$(which firewall-cmd); fi
+#fw() { firewall-cmd "$@" 2>&1 | grep -oq 'success' && success_box "success" || log_error $*; }
+#fw() { firewall-cmd "$@" 2>/dev/null | awk '/success/ {print "success"}'; }
+#exec_fw() {
+#  local cmd="$*"
+#  local result
+#  result=$(fw "$@")
+#  if [[ -n "$result" ]]; then
+#    echo "✓ $cmd → $result"
+#  else
+#    # Если success нет, значит, либо ошибка, либо команда не должна была его вернуть
+#    echo "✗ $cmd → проверь вывод выше (красная ошибка)"
+#  fi
+#}
+#fwprm="$(exec_fw '--permanent')"#    ! firewall-cmd --reload awk '/success/ {print "success"}' || log_ok "Firewalld $1 reload $?" #    return $?

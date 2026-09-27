@@ -38,7 +38,7 @@ colors_inc="${INCLUDE_DIR}/.${PROJ_NAME}-colors"
 output_inc="${INCLUDE_DIR}/.${PROJ_NAME}-output"
 input_inc="${INCLUDE_DIR}/.${PROJ_NAME}-input"
 functions_inc="${INCLUDE_DIR}/.${PROJ_NAME}-functions"
-firewall_inc="${HOME_DIR}/.firewalld/.fw_cmd-env"
+firewalld_inc="${INCLUDE_DIR}/.firewalld-env"
 
 #-> Разное:
 app_name=${PROJ_NAME}
@@ -50,12 +50,10 @@ pr_owner="vados-dev"
 repo_name=${PROJ_NAME}
 github_url="https://github.com/"
 #-> Запрос подтверждения в функции ask_confirm:
-ASSUME_YES=0
-
-#-> Подключаем файл с секретами
-source ${secure_inc}
+AUTO_YES=0
 
 ### НАСТРОЙКИ ВЕДЕНИЯ ЛОГОВ:
+############################
 #-> Их асположение можно переопределить в любом модуле достаточно
 #-> вверху файла module.sh, прописать переменные:
 #CUSTOM_LOGS_DIR="/path/to/logfile"
@@ -67,6 +65,7 @@ LOGS_DIR=${CUSTOM_LOGS_DIR:-$SYSLOGS_DIR}
 LOG_FILE=${CUSTOM_LOG_FILE:-${app_name}.log}
 DEFAULT_LOG="${LOGS_DIR}/${LOG_FILE}"
 SAVE_LOG=true
+dbg="${dbg:-0}"
 
 ### For colors:
 ################
