@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
 #set -x
+#dbg="1"
+export LC_ALL=${LC_ALL:-C.UTF-8}
+
+NO_COLOR=false
 
 source ./.awg-multitools-env
 source ./.awg-multitools-colors
@@ -8,6 +12,27 @@ source ./.awg-multitools-output
 source ./.awg-multitools-input
 source ./.awg-multitools-functions
 source ./.firewalld-env
+
+
+slp() { sleep 7; }
+auto_log slp 15 "Cs"
+# || echo -en "slp ERROR"
+cursor_blink_on
+
+exit 0
+printf '%s\n' "$spin_ok"
+printf '%s\n' "$sym_inc"
+printf '%s\n' "$sym_wait"
+
+#exit 0
+
+
+echo
+echo -en $sym_inc
+echo
+echo -en $sym_folder
+
+exit 0
 
 check_kernel_version() {
     # The AmneziaWG 2.0 module is built via DKMS against the host kernel. On

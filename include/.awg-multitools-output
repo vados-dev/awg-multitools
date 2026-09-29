@@ -12,33 +12,13 @@ cursor_move_left()  { printf "$ESC[${1}D"; }
 cursor_move_right() { printf "$ESC[${1}C"; }
 print_inactive()    { printf "    $2   $1 "; }
 print_active()      { printf "    $2  $ESC[7m $1 $ESC[27m"; }
-#show_inactive() {
-#    local formatted_option formatted_prefix="$2"
-#    [[ "$2" == *"✔"* ]] && printf -v formatted_prefix "${bgrn}✔${nc}"
-#    printf -v formatted_option "${bnc}%s${nc}" "$1"
-#    printf "    %s\t%s" "$formatted_prefix" "$formatted_option"
-#}
-#show_active() {
-#    local formatted_option formatted_prefix="$2"
-#    [[ "$2" == *"✔"* ]] && printf -v formatted_prefix "${bgrn}✔${bn}"
-#    printf -v formatted_option "\033[7m%s\033[27m" "$1"
-#    printf "    %s\t%s" "$formatted_prefix" "$formatted_option"
-#}
-
 get_cursor_row()    { IFS=';' read -sdR -p $'\E[6n' ROW COL; echo ${ROW#*[}; }
 get_cursor_col()    { IFS=';' read -sdR -p $'\E[6n' ROW COL; echo ${COL#*[}; }
-
 key_input() {
     local key
     IFS= read -rsn1 key 2>/dev/null >&2
     if [[ $key = ""      ]]; then echo enter; fi;
     if [[ $key = $'\x20' ]]; then echo space; fi;
-#    if [[ $key = $'\e[F' ]]; then echo end; fi;
-#    if [[ $key = $'\e[H' ]]; then echo home; fi;
-#    if [[ $key = $'\x7f' ]]; then echo backspace; fi;
-#    if [[ $key = $'\x1b\x5b\x32\x7e' ]]; then echo insert; fi;
-#    if [[ $key = $'\x1b\x5b\x35\x7e' ]]; then echo pgup; fi;
-#    if [[ $key = $'\x1b\x5b\x36\x7e' ]]; then echo pgdown; fi;
     if [[ $key = "k" ]]; then echo up;    fi;
     if [[ $key = "j" ]]; then echo down;  fi;
     if [[ $key = "h" ]]; then echo left;  fi;
@@ -48,7 +28,6 @@ key_input() {
     if [[ $key = "0" ]]; then echo cancel;  fi;
     if [[ $key = $'\x1b' ]]; then
         read -rsn2 key
-#        if [[ $key = '' || $key = 0 ]]; then echo cancel; fi;
         if [[ $key = [A || $key = k ]]; then echo up;     fi;
         if [[ $key = [B || $key = j ]]; then echo down;   fi;
         if [[ $key = [C || $key = l ]]; then echo right;  fi;
@@ -56,25 +35,33 @@ key_input() {
     fi
 }
 
+### Функции очистки:
+####################
+#-> Полная очистка терминала
+cls() { clear && printf '\e[3J'; }
+#-> Очистить до конца строки
+clnstr() { _tty_reset; printf '%s%s' "$ESC" '[K'; }
+
 ### Основная модель формирования строк вывода:
 ##############################################
 app_title() {
     local name=${pr_name:-$dir_name};
-#    printf " ${bnc}[${nc}${bmag}${name}${bnc}]${nc}";
+    #printf " ${bnc}[${nc}${bmag}${name}${bnc}]${nc}";
     #-> Просто сдвиг на 3 пробела. Выше подставляется имя из переменной \$pr_name
     printf '   ';
 }
 printstr() {
     local _head="$(app_title)";
     if [[ "$#" == 4 ]]; then
-       printf "$(cecho sW "$_head") %s $2$(cecho sW "$1")$(cecho sY "$3")\n" "$4";
+       printf "$(cecho Ws "$_head") %s $2$(cecho Ws "$1")$(cecho sY "$3")" "$4";
     elif [[ "$#" == 3 ]]; then
-       printf "$(cecho sW "$_head") %s $(cecho sW "$1")$(cecho sY "$2")\n" "$3";
+       printf "$(cecho Ws "$_head") %s $(cecho Ws "$1")$(cecho sY "$2")" "$3";
     elif [[ "$#" == 2 ]]; then
-       printf "$(cecho sW "$_head") %s $(cecho sW "$1")\n" "$2";
-    else
-       printf "$(cecho sW "$_head") $(cecho sW "%s")\n" "$1";
+       printf "$(cecho Ws "$_head") %s $(cecho Ws "$1")" "$2";
+    elif [[ "$#" == 1 ]]; then
+       printf "$(echo $_head)$*"
     fi
+       printf '\n'
 }
 
 printselect() {
@@ -83,30 +70,135 @@ printselect() {
        printf "$(cecho sW "$_start") $(cecho sY "%s")$(cecho sW ") -") $(cecho sG "%s") $(cecho sW "(%s)")\n" "$1" "$2" "$3";
     elif [[ "$#" == 2 ]]; then
        printf "$(cecho sW "$_start") $(cecho sM "%s")$(cecho sW ") - %s")\n" "$1" "$2";
-#    else
-#       printf "$(cecho sW "$_head") $(cecho sW "%s")\n" "$1";
+#    else #       printf "$(cecho sW "$_head") $(cecho sW "%s")\n" "$1";
     fi
 }
 
+#-> Спиннер
+auto_log() {
+    local _run="$1" delay=0.15
+    custom_spin_max_time="${2:-${spin_max_time}}"
+    custom_spin_color="${3:-${spin_color}}"
+    unset_spin(){ printf "\r$(clnstr)"; unset custom_spin_color; unset custom_spin_max_time; }
+    local msg="${4:-"Выполнение:"}"
+#    local -a spn20cols=("Ws" "Cs" "Gs" "Ys" "Rs" "Ms" "Bs" "Cs" "Ws" "Ys" "Gs" "Bs" "Ms" "Rs" "Ys" "Ws" "Cs" "Bs" "Gs" "Ys")
+#    local spinmod="20"
+#    local ind=0#("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏" "⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏") #("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+    local tmp=$(mktemp);
+    "$_run" >"$tmp" 2>&1 &
+    local -r pid=$!; local name
+    if [[ -z "$name" ]] 2>/dev/null; then name="$_run"; else name=$(ps a | awk '{print $1}' | grep -q "${pid}" || unset name; log_msg "spin_err" "    Процесс с PID ${pid} не найден."); fi
+    local max_ticks=$(awk "BEGIN{printf \"%d\", (${custom_spin_max_time} / ${delay})}")
+    local i=0 tick=0 spinmod="20"
+    local -a sym
+    mapfile -t sym < <(spn20)
+    while kill -0 "$pid" > /dev/null 2>&1; do
+       log_msg "spin_wait" "${msg} ${name}" "${sym[i]}"
+       i=$(( (i + 1) % spinmod ))
+       sleep "${delay}"
+       ((tick++))
+       if (( tick >= max_ticks )); then
+           kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+           local out=$(<"$tmp"); rm -f "$tmp"; unset_spin
+           log_msg "spin_warn" "Таймаут [${max_ticks}ms], команда: ${name} ${out:+ : $out}" "$sym_warn"
+           return 13
+       fi
+    done
+    wait "$pid"; local rc=$?
+    local out=$(<"$tmp"); rm -f "$tmp"; unset_spin;
+    ! (( rc == "0" )) >&2 && log_msg "spin_err" "${name} (код $rc) ${out:+ : $out}" "$sym_cancel" || log_msg "spin_ok" "${name} ${out:+ : $out}" "$sym_ok"
+    return "$rc"
+}
+
+bad_auto_log() {
+    local _run="$1"; local delay=0.15
+    custom_spin_max_time="${2:-$spin_max_time}"
+    custom_spin_color="${3:-$spin_color}"
+    unset_spin(){ clnstr; unset custom_spin_color; unset custom_spin_max_time; }
+    local tmp=$(mktemp);
+    "$_run" >"$tmp" 2>&1 &
+    local pid=$!
+    local name
+    if [[ -z "$name" ]] 2>/dev/null; then name="$_run"; else name=$(ps a "$pid" -o comm= 2>/dev/null || echo -en "Процесс с PID ${pid} не найден."); fi
+    local frames=("$(cecho ${custom_spin_color} '|')" "$(cecho ${custom_spin_color} '/')" "$(cecho ${custom_spin_color} '-')" "$(cecho ${custom_spin_color} '\\')")
+#    local max_ticks="$(( ${custom_spin_max_time} / ${delay} ))"
+    local max_ticks=$(awk "BEGIN{printf \"%d\", (${custom_spin_max_time} / ${delay})}")
+    local i=0 tick=0
+    tput civis --
+    while kill -0 "$pid" > /dev/null 2>&1; do
+        printstr "\rВыполнение: ${name} - ${frames[i]}"
+        i=$(( (i + 1) % 4 ))
+        sleep "$delay"
+        ((tick++))
+        if (( tick >= max_ticks )); then
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+            local out=$(<"$tmp"); rm -f "$tmp"
+            unset_spin
+            log_msg "spin_warn" "${name} - $_run${out:+ : $out}"
+        fi
+        printf '\b\b\b\b\b' 
+    done
+#    printf "\b\b\b$(clnstr)\b\b\b"
+    wait "$pid"; local rc=$?
+    local out=$(<"$tmp"); rm -f "$tmp"
+    if (( rc == 0 )); then
+        log_msg "spin_ok" "    ${name} - $_run${out:+ : $out}"
+    else
+        log_msg "spin_err" "    ${name} - $_run (код $rc)${out:+ : $out}" >&2
+    fi
+    unset_spin
+    return "$rc"
+    tput cnorm --
+}
+
+spinstr() {
+    local _run="$1"; local delay=0.1
+    custom_spin_max_time="${2:-${spin_max_time}}"
+    custom_spin_color="${3:-${spin_color}}"
+    unset_spin(){ clnstr; unset custom_spin_color; unset custom_spin_max_time; }
+    "$_run" &
+    local pid=$!; local name="$4"
+    if [[ -z "$name" ]] 2>/dev/null; then name="$_run"; else name=$(ps -p "$pid" -o comm= 2>/dev/null || { echo -en "Процесс с PID ${pid} не найден."; return 1; }); fi
+    local frames=("$(cecho ${custom_spin_color} '|')" "$(cecho ${custom_spin_color} '/')" "$(cecho ${custom_spin_color} '-')" "$(cecho ${custom_spin_color} '\\')")
+    local max_ticks=$(awk "BEGIN{printf \"%d\", (${custom_spin_max_time} / ${delay})}")
+    local i=0 tick=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r%s $_run [$name]...   " "${frames[i]}"
+        i=$(( (i + 1) % 4 ))
+        sleep "$delay"
+        ((tick++))
+        if (( tick >= max_ticks )); then
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+            unset_spin; clean_str
+            return 13
+        fi
+    done
+    wait "$pid"; local rc=$?; unset_spin; return "$rc"
+}
 
 ### Функции логирования:
 ########################
 log_msg() {
-    local type="$1";local msg="$2";
+    local type="$1"; local msg="$2";
     local ts=$(date '+%b %d %T');
     local entry="[${ts}] ${type}: ${msg}";
     local existed=1
+    local sym="$3"
     [[ -f "${LOG_FILE}" ]] || existed=0
     case "$type" in
-        info)      printstr "$(cecho sB 'Инфо: ')$(cecho sW "${msg}")" "${sym_info}" ;;
-        ok)        printstr "$(cecho sG 'Ок: ')$(cecho sW "${msg}")" "${sym_ok}" ;;
-        confirmed) printstr "$(cecho sG 'Подтверждено.')" "${sym_ok}" ;;
-        cancelled) printstr "$(cecho sY 'Отменено.')" "${sym_cancel}" ;;
-        warning)   printstr "$(cecho sY 'Внимание: ')$(cecho sW "${msg}")" "${sym_warn}" ;;
-        save)      printstr "$(cecho sG 'Сохраню ')$(cecho sW "${msg}")" "${sym_ok}" ;;
-        delete)    printstr "$(cecho sR 'Удалю ')$(cecho sW "${msg}")" "${minus}" ;;
-        error)     printstr "$(cecho sR 'Ошибка: ')$(cecho sW "${msg}")" "${sym_err}" ;;
-        debug)     printstr "$(cecho sW 'Отладка: ')$(cecho sW "${msg}")" "${sym_dbg}" ;;
+        info)      printstr "$(cecho Bs 'Инфо: ')$(cecho Ws "${msg}")" "${sym_info}" ;;
+        ok)        printstr "$(cecho Gs 'Ок: ')$(cecho Ws "${msg}")" "${sym_ok}" ;;
+        spin_wait) printf "\r    %s $(cecho Ws '%s')" "${sym}" "${msg}" ;;
+        spin_ok)   printf "\r    %s $(cecho Gs 'Ок: ')$(cecho Ws '%s')\n" "${sym}" "${msg}" ;;
+        confirmed) printstr "$(cecho Gs 'Подтверждено.')" "${sym_ok}" ;;
+        cancelled) printstr "$(cecho Ys 'Отменено.')" "${sym_cancel}" ;;
+        warning)   printstr "$(cecho Ys 'Внимание: ')$(cecho Ws "${msg}")" "${sym_warn}" ;;
+        spin_warn) printf "\r    %s $(cecho Ys 'Внимание: ')$(cecho Ws '%s')\n" "${sym}" "${msg}" ;;
+        save)      printstr "$(cecho Gs 'Сохраню ')$(cecho Ws "${msg}")" "${sym_ok}" ;;
+        delete)    printstr "$(cecho Rs 'Удалю ')$(cecho Ws "${msg}")" "${minus}" ;;
+        error)     printstr "$(cecho Rs 'Ошибка: ')$(cecho Ws "${msg}")" "${sym_err}" ;;
+        spin_err)  printf "\r    %s $(cecho Rs 'Ошибка: ')$(cecho Ws '%s')\n" "${sym}" "${msg}" ;;
+        debug)     printstr "$(cecho Ws 'Отладка: ')$(cecho Ws "${msg}")" "${sym_dbg}" ;;
         *) app_title "Error" "${sym_err}" ;;
     esac
     if [[ "${DEFAULT_LOG}" != "" ]] && [[ "${SAVE_LOG}" == true ]];then
@@ -122,9 +214,6 @@ log_msg() {
 
 ### Функции вывода:
 ###################
-#-> Полная очистка терминала
-cls() { clear && printf '\e[3J'; }
-
 #-> Вывод в терминал и для логирования:
 log()         { log_msg "info" "$*"; }
 log_ok()      { log_msg "ok" "$*"; }
@@ -151,14 +240,23 @@ print_section() {
     printf "   ${bmag}${dashes}${nc}\n";
 }
 
-#ok()   { cecho Gs √ $*; }
-#err()  { log_error $*; }
-#warn() { log_warn $*; }
-#info() { log $*; }
-#step() { print_section $*; }
-#step() { echo -e "\n${W}$*${N}\n${D}────────────────────────────────────────────────${N}"; }
+### spin_msg:
+#############
+spin_msg() {
+    local exec="$1"
+    custom_spin_max_time="${2:-${spin_max_time}}"
+    local msg="${3:-$exec}"
+    spinstr "${exec}" ${custom_spin_max_time} "${msg}"
+    case $? in
+        0)  log_ok "$msg" ;;
+        1)  log_error "$msg" ;;
+        13) log_warn "$msg" ;;
+        *)  log_error "$msg (unknown: $?)" ;;
+    esac
+}
 
-### Функция заполнения строк:
+
+### Функции заполнения строк:
 #############################
 #function get_terminal_rows { TERMINAL_ROWS=$(stty -a | awk '{for (i = 1; i < NF; i++) if ($i == "rows") {v = $(i+1); out = ""; for (j = 1; j <= length(v); j++) {c = substr(v, j, 1); if (c >= "0" && c <= "9") out = out c} print out; exit}}'); }
 #toend=$(tput hpa $(tput cols))$(tput cub 6);
@@ -171,6 +269,52 @@ CENTER_ROW=$((TERM_ROWS / 2))
 ABS_CENTER=$(tput cup $CENTER_ROW $CENTER_COL);
 TOP_CENTER=$(tput hpa ${CENTER_COL});
 
+
+strip_colors() { echo "$1" | sed 's/\x1b\[[0-9;]*m//g'; }
+
+### _vlen <string>:
+#—> видимая длина строки (без ANSI-кодов) Работает и с \e[32m, и с реальными ESC-байтами
+_vlen() {
+  local s
+  s=$(printf '%s' "$1" | sed -E 's/\\e/\x1b/g; s/\x1b[[:alnum:];]*[mK]//g')
+  printf '%d' "${#s}"
+}
+
+align::left() {
+  local -i width=${1:-$COLS_NUM}
+  local -- txt=${2:-}
+  local str=$(strip_colors "$txt")
+  [[ -z $width ]] && width=80
+  local -i length
+  length=$(_vlen "$str")
+  (( length >= width )) && { printf '%b' "${str:0:width}"; return; }
+  local -i pad_right=$((width - length))
+  printf '%b%*s' "$str" "$pad_right" ''
+}
+
+align::right() {
+  local -i width=${1:-$COLS_NUM}
+  local -- str=${2:-}
+  [[ -z $width ]] && width=80
+  local -i length
+  length=$(_vlen "$str")
+  (( length >= width )) && { printf '%b' "${str:0:width}"; return; }
+  local -i pad_left=$((width - length))
+  printf '%*s%b' "$pad_left" '' "$str"
+}
+
+align::center() {
+  local -i width=${1:-$COLS_NUM}
+  local -- str=${2:-}
+  [[ -z $width ]] && width=80
+  local -i length
+  length=$(_vlen "$str")
+  (( length >= width )) && { printf '%b' "${str:0:width}"; return; }
+  local -i pad_left=$(( (width - length) / 2 ))
+  local -i pad_right=$((width - length - pad_left))
+  printf '%*s%b%*s' "$pad_left" '' "$str" "$pad_right" ''
+}
+
 # Выравнивание ячейки по ШИРИНЕ В СИМВОЛАХ. printf считает байты, поэтому колонка с кириллицей съезжает ровно на число многобайтовых символов.
 _cols_pad() {
     local s="$1" w="$2" chars bytes
@@ -179,31 +323,7 @@ _cols_pad() {
     printf '%-*s ' "$((w + bytes - chars))" "$s"
 }
 
-align::left() {
-  local -i width=${1:?}
-  local -- str=${2:?}
-#  local clr_str="$2"
-  local -i length=$((${#str} > width ? width : ${#str}))
-  local -i pad_right=$((width - length))
-  printf '%s%*s' "${str:0:length}" ${pad_right} ''
-}
-align::right() {
-  local -i width=${1:?}
-  local -- str=${2:?}
-  local -i length=$((${#str} > width ? width : ${#str}))
-  local -i offset=$((${#str} - length))
-  local -i pad_left=$((width - length))
-  printf '%*s%s' $pad_left '' "${str:offset:length}"
-}
-align::center() {
-  local -i width=${1:?}
-  local -- str=${2:?}
-  local -i length=$((${#str} > width ? width : ${#str}))
-  local -i offset=$(((${#str} - length) / 2))
-  local -i pad_left=$(((width - length) / 2))
-  local -i pad_right=$((width - length - pad_left))
-  printf '%*s%s%*s' $pad_left '' "${str:offset:length}" $pad_right ''
-}
+
 
 stars=${byel}'✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨'${nc};
 line='##############################################################';
@@ -230,22 +350,23 @@ equals="$(print_line ═ $COLS_NUM)"
 big_dashes="$(print_line ━ $COLS_NUM)"
 
 ok_box() {
-    local ok=$(log_ok "$*") line="$(cecho sG ${dashes})"
+    local _ok=$(log_ok "$*"); line="$(cecho Gs ${dashes})"
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
-    printf "    %s\n" "$(align::left $COLS_NUM "$ok")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$_ok")"
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
 }
-alias success_box="$(ok_box)"
+sccess_box() { ok_box "$*"; }
 failure_box() {
-    local err=$(log_error "$*") line="$(cecho Rs ${dashes})"
+    local _err=$(log_error "$*"); line="$(cecho Rs ${dashes})"
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
-    printf "    %s\n" "$(align::left $COLS_NUM "$err")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$_err")"
 }
 warning_box() {
-    local warn=$(log_warn "$*") line="$(cecho Ys ${dashes})"
+    local _warn=$(log_warn "$*"); line="$(cecho Ys ${dashes})"
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
-    printf "    %s\n" "$(align::left $COLS_NUM "$warn")"
+    printf "    %s\n" "$(align::left $COLS_NUM "$_warn")"
 }
+
 
 print_banner() {
     local title="${1:-$mTitle}" desc="$2"
@@ -267,7 +388,7 @@ show_window_head() {
     local lastcol=`get_cursor_col`
     trap "cursor_blink_on; stty echo; printf '\n'; exit" 2
     cursor_blink_off
-_tty_reset
+    _tty_reset
     local _str="$(cecho sWb "  $pr_name $app_version  ")$(cecho sW │)$(cecho sWm "  ${mTitle}  ")$(cecho sW │)$(cecho sWb "  Хост: ")$(cecho sfWb "$(hostname)  ")$(cecho sW │)$(cecho sWb " (un)select all : key ([n])[a] ")$(cecho sW │)$(cecho sWb " move : arrow up/down/left/right or keys k/j/l/h ")$(cecho sW │)$(cecho sWb " validation : [enter] ")$(cecho sW │)$(echo -e ${blub})"
 #    local _str="$(cecho sWb "  $pr_name $app_version  │)$(cecho sWm "  ${mTitle}  ")$(cecho sWb "│  Хост: ")$(cecho sfWb "$(hostname)  ")$(cecho sWb "│  (un)select all : key ([n])[a]  │  move : arrow up/down/left/right or keys k/j/l/h  │  validation : [enter]  │")$(echo -e ${blub})"
 # column -t -s '|')"
@@ -332,6 +453,7 @@ wg_header() {
 ##############################
 #-> Помогаторы:
 menu_pause() { echo ""; _read_line "$(cecho sW '    Нажмите Enter для возврата в меню...')" _; }
+press_continue() { echo ""; _read_line "$(cecho sW '    Нажмите Enter для продолжения...')" _; }
 #-> Главное меню и меню разделов:
 show_menu() {
     wg_header
@@ -533,7 +655,6 @@ med_multiselect() {
 #########
 # single_select_menu "true" result array 2 "Выберите одну опцию"
 # Обработка результата: просто возврат переменной ($result).
-
 single_select() {
     local help_flag=$1 return_value=$2; local -n options=$3
     local default_selection="${4:-0}" prompt="$5"
@@ -735,3 +856,30 @@ multi_select_menu(){
 #            esac
 #    done
 }
+#ok()   { cecho Gs √ $*; }
+#err()  { log_error $*; }
+#warn() { log_warn $*; }
+#info() { log $*; }
+#step() { print_section $*; }
+#step() { echo -e "\n${W}$*${N}\n${D}────────────────────────────────────────────────${N}"; }
+
+#show_inactive() {
+#    local formatted_option formatted_prefix="$2"
+#    [[ "$2" == *"✔"* ]] && printf -v formatted_prefix "${bgrn}✔${nc}"
+#    printf -v formatted_option "${bnc}%s${nc}" "$1"
+#    printf "    %s\t%s" "$formatted_prefix" "$formatted_option"
+#}
+#show_active() {
+#    local formatted_option formatted_prefix="$2"
+#    [[ "$2" == *"✔"* ]] && printf -v formatted_prefix "${bgrn}✔${bn}"
+#    printf -v formatted_option "\033[7m%s\033[27m" "$1"
+#    printf "    %s\t%s" "$formatted_prefix" "$formatted_option"
+#}
+
+#    if [[ $key = $'\e[F' ]]; then echo end; fi;
+#    if [[ $key = $'\e[H' ]]; then echo home; fi;
+#    if [[ $key = $'\x7f' ]]; then echo backspace; fi;
+#    if [[ $key = $'\x1b\x5b\x32\x7e' ]]; then echo insert; fi;
+#    if [[ $key = $'\x1b\x5b\x35\x7e' ]]; then echo pgup; fi;
+#    if [[ $key = $'\x1b\x5b\x36\x7e' ]]; then echo pgdown; fi;
+#        if [[ $key = '' || $key = 0 ]]; then echo cancel; fi;

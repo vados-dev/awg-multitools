@@ -73,6 +73,11 @@ dbg="${dbg:-0}"
 COLS_NUM=79
 #-> Можно выключить цвет:
 NO_COLOR=false
+### Спиннер:
+############
+#-> Цвет спиннера по умолчанию (cecho-код):
+spin_color=${custom_spin_color:-"Ks"}
+spin_max_time=${custom_spin_max_time:-"30"}
 
 ### Переменные для отладки:
 ###########################

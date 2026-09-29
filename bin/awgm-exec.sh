@@ -2,8 +2,6 @@
 
 #set -Eeuo pipefail
 
-#-> запускалка по умолчанию:
-default_run=run_exec
 #-> Альяс этого скрипта если уже установлен и сделан source ~/.bash_profile
 #me_alias=$(alias | grep awgm-exec.sh | awk '{print $2}' | cut -d'=' -f1)
 me_alias="awgm"
@@ -13,7 +11,6 @@ BIN_DIR=${SELF%/*}
 PARENT_DIR="$(dirname "$BIN_DIR")"
 #-> название проекта (берём название корневой папки)
 PROJ_NAME=${PARENT_DIR##*/}
-BUILD_SCRIPT="${PARENT_DIR}/build.sh"
 INCLUDE_DIR="${PARENT_DIR}/include"
 env_inc="${INCLUDE_DIR}/.${PROJ_NAME}-env"
 #-> Имя этого скрипта с расширением:
@@ -21,22 +18,32 @@ me_ext=$(basename "$0")
 #-> Имя этого скрипта без расширения:
 me="${me_ext%.*}"
 
+dbg=0
+
 ### Подключаем инклюды:
 #######################
 source $env_inc
 source $colors_inc
 source $output_inc
+source $input_inc
 
 EXEC_SCRIPT="${SELF}"
 SRC_ROOT="${PARENT_DIR}"
 
 #--- > Флаг дефолтного запуска сразу после билда.
 #FlagRUN=true
+cursor_blink_on
+_tty_reset
+#exit 0
 
-##################
-### Запускалки ###
-##################
-show_test() {
+### Запускалки:
+###############1
+dbg_cmd() { printf '%s\n' "$(cecho Ws "[#] $*")" >&2; "$@"; }
+#color_cmd() { local cmd="$*"; { out=$($cmd); exit_code=$?; } && printf "$( '%s')\n" "${out}" || { printf "$(err_color '%s')\n" "${out}"; exit "$exit_code"; }; }
+cmd() { printf '%s\n' "$*"; "$@"; }
+die() { printf '%s\n' "$(err_color "${me}: $*")" >&2; exit 1; }
+
+exec_test() {
 echo $OUT_FILE
 echo $SRC_DIR
 echo $BUILD_SCRIPT
@@ -59,13 +66,19 @@ exit 0
 #echo "$run_cmd $arg1 $arg2"
 
 #exit 0
+exec_cmd() {
+    if [[ "$dbg" = 0 ]] > /dev/null 2>&1; then
+        cmd bash "$@"
+    else
+        dbg_cmd bash "$@"
+    fi
+}
 
 run_build() { bash ${BUILD_SCRIPT}; }
 run_exec() {
-#   local run_obj="$1"
-   run_build
-   bash ${MAIN_SCRIPT}
-exit 0
+   local run_obj="$1"
+   bash ${run_obj}
+#exit 0
 }
 
 _check(){
@@ -79,7 +92,7 @@ _check(){
 
 
 show_help() {
-    echo -e "${bld} Управление запуском скрипта${byel} ${me_alias}${bnc}."
+    printf "$(cecho Ws '  Управление запуском скрипта') $(cecho Ys '%s')$(cecho Ws ':')\n" "$me_alias"
     echo -e "┌─────────────────────────────────────────────────────────────────┐"
     echo -e "│         Использование: sudo bash ${bgrn}${me_alias}${bnc} [${byell}ОПЦИИ${bnc}]                   │"
     echo -e "├─────────────────────────────────────────────────────────────────┤"
@@ -97,26 +110,31 @@ show_help() {
 
 ### Основная логика:
 ####################
+#-> запускалка по умолчанию:
+default_run() { exec_cmd ${BUILD_SCRIPT}; press_continue; exec_cmd ${MAIN_SCRIPT}; }
+
 echo -e ${nc}
 if [ "$#" -lt 1 ]; then
-        $default_run
-#else
+    default_run
+else
 #        if [ "$2" = "-y" ] || [ "$2" = "-Y" ]; then
 #                commandConfirmed="true"
 #        fi
-#
-#        if [ "$1" = "build" ]||[ "$1" = "-b" ]; then
-#                _build
-#            ![[ -z "$FlagRUN" ]] > /dev/null 2>&1 || _exec
-#        elif [ "$1" = "start" ]||[ "$1" = "run" ]||[ "$1" = "-s" ]; then
-#                    _exec
-#        elif [ "$1" = "help" ]||[ "$1" = "-h" ]; then
-#                show_help
-#        elif [ "$1" = "test" ]||[ "$1" = "-t" ]; then
-#                show_test
-#        else
-#            show_help
-#        fi
+        if [ "$1" = "build" ]||[ "$1" = "-b" ]; then
+            exec_cmd ${BUILD_SCRIPT}
+        elif [ "$1" = "start" ]||[ "$1" = "run" ]||[ "$1" = "-r" ]; then
+            exec_cmd ${MAIN_SCRIPT}
+        elif [ "$1" = "brun" ]||[ "$1" = "-br" ]; then
+            exec_cmd ${BUILD_SCRIPT}
+            press_continue
+            exec_cmd ${MAIN_SCRIPT}
+        elif [ "$1" = "help" ]||[ "$1" = "-h" ]; then
+            show_help
+        elif [ "$1" = "test" ]||[ "$1" = "-t" ]; then
+            exec_test
+        else
+            show_help
+        fi
 fi
 printf "%s\n" "$dashes"
 

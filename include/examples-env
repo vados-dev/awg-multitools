@@ -291,3 +291,109 @@ function prompt_for_multiselect {
 #
 #     _       ___                                      __
 #
+#align::left() {
+#  local -i width=${1:?}
+#  local -- str=${2:?}
+##  local clr_str="$2"
+#  local -i length=$((${#str} > width ? width : ${#str}))
+#  local -i pad_right=$((width - length))
+#  printf '%s%*s' "${str:0:length}" ${pad_right} ''
+#}
+#align::right() {
+#  local -i width=${1:?}
+#  local -- str=${2:?}
+#  local -i length=$((${#str} > width ? width : ${#str}))
+#  local -i offset=$((${#str} - length))
+#  local -i pad_left=$((width - length))
+#  printf '%*s%s' $pad_left '' "${str:offset:length}"
+#}
+#align::center() {
+#  local -i width=${1:?}
+#  local -- str=${2:?}
+#  local -i length=$((${#str} > width ? width : ${#str}))
+#  local -i offset=$(((${#str} - length) / 2))
+#  local -i pad_left=$(((width - length) / 2))
+#  local -i pad_right=$((width - length - pad_left))
+#  printf '%*s%s%*s' $pad_left '' "${str:offset:length}" $pad_right ''
+#}
+
+### bad_spinstr:
+############
+#-> Использование:
+# Дефолтный цвет (из .env — spin_color):
+#spinstr "Reload firewalld" firewall-cmd --reload
+# Явный цвет (cecho-код):
+#spinstr "Установка AWG2" --color sM bash ./install.sh
+# Длинная команда с аргументами:
+#spinstr "Настройка WARP" --color sY ./warp.sh --mode proxy
+# Проверка:
+#sleep 10 & #spinstr $! #exit 0
+
+bad_spinstr() {
+    local msg="${1:-}"; shift
+    local color="${spin_color}"
+    local sym
+    # Опционально --color <cecho-код> #[[ "${1:-}" == "--color" ]] && color="$2"; shift 2;
+    # Запускаем команду в фоне
+    "$@" &
+    local -r pid=$!
+    # Имя процесса по PID
+    local name=$(ps -p "$pid" -o comm= 2>/dev/null || { log_warn "Процесс с PID ${pid} не найден."; return 1; })
+    # Если процесс не стартанул — сразу в failure_box
+    kill -0 "$pid" 2>/dev/null || { failure_box "$msg"; return 1; }
+    # Заранее красим кадры через cecho (один раз, не в цикле)
+    local frames=(
+        "$(cecho "$col" '|')"
+        "$(cecho "$col" '/')"
+        "$(cecho "$col" '-')"
+        "$(cecho "$col" '\')"
+    )
+    # Крутим, пока жив
+    local i=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r%s %s...   " "${frames[i]}" "$msg"
+        i=$(( (i + 1) % 4 ))
+        sleep 0.15
+    done
+    # Ловим код возврата
+    wait "$pid"
+    local rc=$?
+    # Стираем строку спиннера
+    printf "\r\033[K"
+    # Результат
+    if (( rc == 0 )); then
+        printf "%s %s\n" "$spin_ok" "$msg"
+        ok_box "$msg"
+    else
+        printf "%s %s\n" "$spin_err" "$msg"
+        failure_box "$msg"
+    fi
+    return $rc
+}
+
+my_spinstr() {
+  local -r pid="${1}"
+  local msg="${2:-"Ok"}"
+  local delay=0.1
+  local spinsym='\\||//-'
+  local tmp
+  if [ ! -t 1 ] || [ -z "${TERM:-}" ]; then
+    while kill -0 "${pid}" 2>/dev/null; do
+      sleep "${delay}"
+    done
+    return 0
+  fi
+  tput civis --
+  while ps a | awk '{print $1}' | grep -q "${pid}"; do
+    tmp="${spinsym#?}"
+    printf " %c " "${spinsym}"
+    spinsym=${tmp}${spinsym%"${tmp}"}
+    sleep "${delay}"
+    printf "\b\b\b\b\b"
+  done
+  printf "\r$(cecho Gs "$sym_sel %s%s")\n" "$msg"
+#  printf "\b\b\b\b[ ✔ ]\\n"
+#  echo -ne "\\r[✅]\\n"
+tput cnorm --
+}
+#sleep 10 & #spinstr $! #exit 0
