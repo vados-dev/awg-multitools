@@ -397,3 +397,129 @@ my_spinstr() {
 tput cnorm --
 }
 #sleep 10 & #spinstr $! #exit 0
+
+multi_select_menu(){
+    local idx=0 dbg=0 status=1 selected=$1 colmax=$2 TARGET=() offcet=0
+    offset=$(( $COLS_NUM / $colmax ))
+    multiselect_43m result $colmax $offset ${#_list[@]} "${_list[@]}" #"${msDefault[@]}" "${msPrompt}"
+    for option in "${_list[@]}"; do
+        if  [[ ${result[idx]} == true ]]; then
+#            TARGET+="${option}"
+            if [ $dbg -eq 1 ]; then
+                log_debug "$option\t=> ${result[idx]}"
+#                log_debug "$TARGET"
+            fi
+#            TARGET=`echo $TARGET ${option}`
+            TARGET+=("$option")
+#            ssSelected+="${option}"
+            status=0
+        fi
+            ((idx++))
+    done
+    [ $status -eq 0 ] && log_ok "Выбрано: ${TARGET[*]}." || log_warn "Ничего не выбрано."
+    eval $selected='("${TARGET[@]}")'
+#    while true; do
+#        case `key_input` in
+#                cancel)  return 1 ;;
+#                enter)  break ;;
+#            esac
+#    done
+}
+
+
+#ok()   { cecho Gs √ $*; }
+#err()  { log_error $*; }
+#warn() { log_warn $*; }
+#info() { log $*; }
+#step() { print_section $*; }
+#step() { echo -e "\n${W}$*${N}\n${D}────────────────────────────────────────────────${N}"; }
+
+#show_inactive() {
+#    local formatted_option formatted_prefix="$2"
+#    [[ "$2" == *"✔"* ]] && printf -v formatted_prefix "${bgrn}✔${nc}"
+#    printf -v formatted_option "${bnc}%s${nc}" "$1"
+#    printf "    %s\t%s" "$formatted_prefix" "$formatted_option"
+#}
+#show_active() {
+#    local formatted_option formatted_prefix="$2"
+#    [[ "$2" == *"✔"* ]] && printf -v formatted_prefix "${bgrn}✔${bn}"
+#    printf -v formatted_option "\033[7m%s\033[27m" "$1"
+#    printf "    %s\t%s" "$formatted_prefix" "$formatted_option"
+#}
+
+#    if [[ $key = $'\e[F' ]]; then echo end; fi;
+#    if [[ $key = $'\e[H' ]]; then echo home; fi;
+#    if [[ $key = $'\x7f' ]]; then echo backspace; fi;
+#    if [[ $key = $'\x1b\x5b\x32\x7e' ]]; then echo insert; fi;
+#    if [[ $key = $'\x1b\x5b\x35\x7e' ]]; then echo pgup; fi;
+#    if [[ $key = $'\x1b\x5b\x36\x7e' ]]; then echo pgdown; fi;
+#        if [[ $key = '' || $key = 0 ]]; then echo cancel; fi;
+
+
+bad_auto_log() {
+    local _run="$1"; local delay=0.15
+    custom_spin_max_time="${2:-$spin_max_time}"
+    custom_spin_color="${3:-$spin_color}"
+    unset_spin(){ clnstr; unset custom_spin_color; unset custom_spin_max_time; }
+    local tmp=$(mktemp);
+    "$_run" >"$tmp" 2>&1 &
+    local pid=$!
+    local name
+    if [[ -z "$name" ]] 2>/dev/null; then name="$_run"; else name=$(ps a "$pid" -o comm= 2>/dev/null || echo -en "Процесс с PID ${pid} не найден."); fi
+    local frames=("$(cecho ${custom_spin_color} '|')" "$(cecho ${custom_spin_color} '/')" "$(cecho ${custom_spin_color} '-')" "$(cecho ${custom_spin_color} '\\')")
+#    local max_ticks="$(( ${custom_spin_max_time} / ${delay} ))"
+    local max_ticks=$(awk "BEGIN{printf \"%d\", (${custom_spin_max_time} / ${delay})}")
+    local i=0 tick=0
+    tput civis --
+    while kill -0 "$pid" > /dev/null 2>&1; do
+        printstr "\rВыполнение: ${name} - ${frames[i]}"
+        i=$(( (i + 1) % 4 ))
+        sleep "$delay"
+        ((tick++))
+        if (( tick >= max_ticks )); then
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+            local out=$(<"$tmp"); rm -f "$tmp"
+            unset_spin
+            log_msg "spin_warn" "${name} - $_run${out:+ : $out}"
+        fi
+        printf '\b\b\b\b\b'
+    done
+#    printf "\b\b\b$(clnstr)\b\b\b"
+    wait "$pid"; local rc=$?
+    local out=$(<"$tmp"); rm -f "$tmp"
+    if (( rc == 0 )); then
+        log_msg "spin_ok" "    ${name} - $_run${out:+ : $out}"
+    else
+        log_msg "spin_err" "    ${name} - $_run (код $rc)${out:+ : $out}" >&2
+    fi
+    unset_spin
+    return "$rc"
+    tput cnorm --
+}
+
+spinstr() {
+    local _run="$1"; local delay=0.1
+    custom_spin_max_time="${2:-${spin_max_time}}"
+    custom_spin_color="${3:-${spin_color}}"
+    unset_spin(){ clnstr; unset custom_spin_color; unset custom_spin_max_time; }
+    "$_run" &
+    local pid=$!; local name="$4"
+    if [[ -z "$name" ]] 2>/dev/null; then name="$_run"; else name=$(ps -p "$pid" -o comm= 2>/dev/null || { echo -en "Процесс с PID ${pid} не найден."; return 1; }); fi
+    local frames=("$(cecho ${custom_spin_color} '|')" "$(cecho ${custom_spin_color} '/')" "$(cecho ${custom_spin_color} '-')" "$(cecho ${custom_spin_color} '\\')")
+    local max_ticks=$(awk "BEGIN{printf \"%d\", (${custom_spin_max_time} / ${delay})}")
+    local i=0 tick=0
+    while kill -0 "$pid" 2>/dev/null; do
+        printf "\r%s $_run [$name]...   " "${frames[i]}"
+        i=$(( (i + 1) % 4 ))
+        sleep "$delay"
+        ((tick++))
+        if (( tick >= max_ticks )); then
+            kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null || true
+            unset_spin; clean_str
+
+            return 13
+        fi
+    done
+    wait "$pid"; local rc=$?; unset_spin; return "$rc"
+}
+

@@ -93,9 +93,9 @@ fi
 #   - ULA (fddd::/...) для `ip` имеет scope global, но в интернет не маршрутизируется. Эхо 1 только когда выполнены оба условия, иначе 0.
 detect_native_ipv6() {
     local have_addr=0 have_route=0
-    ip -6 addr show scope global 2>/dev/null | grep -oP 'inet6\s+\K[0-9a-fA-F:]+' | grep -qviE '^(fc|fd)' && have_addr=1
-    ip -6 route show default 2>/dev/null | grep -q . && have_route=1
-    [[ "$have_addr" -eq 1 && "$have_route" -eq 1 ]] && ok_box "Native IPv6 на VPS присутствует."; return 0 || { warn_box "Native IPv6 на VPS отсутствует."; return 1; }
+    ! ip -6 addr show scope global 2>/dev/null | grep -oP 'inet6\s+\K[0-9a-fA-F:]+' | grep -qviE '^(fc|fd)' || have_addr=1
+    ! ip -6 route show default 2>/dev/null | grep -q . || have_route=1
+    [[ "$have_addr" -eq 1 && "$have_route" -eq 1 ]] && echo "on" || echo "off"
 }
 
 ### Валидаторы IP / CIDR:

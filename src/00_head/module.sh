@@ -19,6 +19,8 @@ if [ -z "$BASH_VERSION" ]; then echo "Запустите через bash: bash $
 #set -o pipefail
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+#-> Новый SELF без файла на конце
+#SELF=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
 PROJ_ROOT_DIR=${SELF%/*}
 #<::PROJ_WORK_DIR::>
 PROJ_NAME=${PROJ_WORK_DIR##*/}
@@ -29,7 +31,6 @@ me="${me_ext%.*}"
 
 #-> Подключаем инклюды:
 #######################
-#-> Подключаем файл с секретами
 source $env_inc
 source $secure_inc
 source $colors_inc

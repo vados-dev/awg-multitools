@@ -22,8 +22,10 @@ VPN_TOOLS="${VPN_DIR}/tools"
 VPN_HELPERS="${VPN_DIR}/helpers"
 
 #-> Вычисленные:
-SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-BIN_DIR=${SELF%/*}
+#SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+#-> Новый SELF без файла на конце
+SELF=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")1
+BIN_DIR=${SELF}
 PARENT_DIR="$(dirname "$BIN_DIR")"
 #-> название проекта (берём название корневой папки)
 PROJ_NAME=${PARENT_DIR##*/}

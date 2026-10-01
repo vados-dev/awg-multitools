@@ -28,8 +28,10 @@ DIRS=(
     "99_entry"
 )
 
-SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-BUILD_DIR=${SELF%/*}
+#SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+#-> Новый SELF без файла на конце
+SELF=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+BUILD_DIR=${SELF}
 
 #-> Подключаем инклюды
 source "${BUILD_DIR}/include/.${BUILD_DIR##*/}-env"

@@ -6,8 +6,10 @@
 #me_alias=$(alias | grep awgm-exec.sh | awk '{print $2}' | cut -d'=' -f1)
 me_alias="awgm"
 
-SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-BIN_DIR=${SELF%/*}
+#SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+#-> Новый SELF без файла на конце
+SELF=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+BIN_DIR=${SELF}
 PARENT_DIR="$(dirname "$BIN_DIR")"
 #-> название проекта (берём название корневой папки)
 PROJ_NAME=${PARENT_DIR##*/}
@@ -27,7 +29,7 @@ source $colors_inc
 source $output_inc
 source $input_inc
 
-EXEC_SCRIPT="${SELF}"
+EXEC_SCRIPT="${SELF}/${me_ext}"
 SRC_ROOT="${PARENT_DIR}"
 
 #--- > Флаг дефолтного запуска сразу после билда.

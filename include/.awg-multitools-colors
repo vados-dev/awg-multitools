@@ -31,10 +31,10 @@ if [ -t 0 ] && ! $NO_COLOR; then
     blkB=$(_c sfW); redB=$(_c sfWr); grnB=$(_c fBg); yelB=$(_c fBy); bluB=$(_c sfWb); magB=$(_c sfWm); cyB=$(_c fKc); whB=$(_c sfWk);
     rev=$(tput rev); blink=$(_c f); neg=$(_c n);
     sym_ok=$(cecho Gs √); spin_ok=$(cecho Gs '✔'); sym_cancel=$(cecho Rs ✘); sym_err=$(cecho Rf ❌); install=$(cecho 0 💿); sym_install=$(cecho Gs 📦); sym_wait=$(cecho Ys ⏳); warning=$(cecho Ys '!');
-    sym_warn=$(cecho Ys ⚡); sym_info=$(cecho Bs 📋); sym_docs=$(cecho Ws 📖); sym_dbg=$(cecho Ws 🔧); sym_star=$(cecho Ys ✨); sym_search=$(cecho Ws 🔍); sym_sec=$(cecho Rs '🧱');
+    sym_warn=$(cecho Ys ⚡); sym_stick=$(cecho Rs 📌); sym_info=$(cecho Bs 📋); sym_docs=$(cecho Ws 📖); sym_dbg=$(cecho Ws 🔧); sym_star=$(cecho Ys ✨); sym_search=$(cecho Ws 🔍); sym_sec=$(cecho Rs '🧱');
     sym_folder=$(cecho Ys 📁); sym_hand=$(cecho sY 👉); minus=$(cecho Rf —); plus=$(cecho Gs +); sym_sel=$(cecho Gs ✅); sym_unsel=(cecho 0 ❎); warn=$(cecho Ys ▲); sym_service=$(cecho Ws '🛠');
     arr_right=$(cecho Ws →); arr_left=$(cecho Ws ←); arr_up=$(cecho Ws ↑); arr_down=$(cecho Ws ↓); arr_gor=$(cecho Ws ↔); arr_vert=$(cecho Ws ↕); zamok=$(cecho Rs 🔒); sym_inc=$(cecho Gs 🔌); sym_door=$(cecho Ws '🛡');
-    play_up=$(cecho Gs △); play_down=$(cecho Gs ▽); play_stop=$(cecho Gs ▢); sym_help=$(cecho R ❓); sm_point=$(cecho Ws •); big_point=$(cecho Ws ⚫); big_plus=$(cecho R ➕);
+    play_up=$(cecho Gs △); play_down=$(cecho Gs ▽); play_stop=$(cecho Gs ▢); sym_help=$(cecho R ❓); sym_tip=$(cecho Ys 💡); sm_point=$(cecho Ws •); big_point=$(cecho Ws ⚫); big_plus=$(cecho R ➕);
     spn20() {
     local -a spn20cols=("Ws" "Cs" "Gs" "Ys" "Rs" "Ms" "Bs" "Cs" "Ws" "Ys" "Gs" "Bs" "Ms" "Rs" "Ys" "Ws" "Cs" "Bs" "Gs" "Ys")
     local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
@@ -55,15 +55,15 @@ else
     blkb=''; redb=''; grnb=''; yelb=''; blub=''; magb=''; cyb=''; whb='';
     bblk=''; bred=''; bgrn=''; byel=''; bblu=''; bmag=''; bcy=''; bwh='';
     sym_ok='√'; spin_ok='✓'; sym_cancel='✘'; sym_err='❌'; install='💿';sym_install='📦'; sym_wait='⏳'; warning='!';
-    sym_warn='⚡'; sym_info='📋'; sym_docs='📖'; sym_dbg='🔧'; sym_star='✨'; sym_search='🔍'; sym_sec='🧱';
+    sym_warn='⚡'; sym_stick='📌'; sym_info='📋'; sym_docs='📖'; sym_dbg='🔧'; sym_star='✨'; sym_search='🔍'; sym_sec='🧱';
     sym_folder='📁'; sym_hand='👉'; minus='—'; plus=1'+'; sym_sel='✅'; sym_unsel='❎'; warn='▲'; sym_service='🛠';
     arr_right='→'; arr_left='←'; arr_up='↑'; arr_down='↓'; arr_gor='↔'; arr_vert='↕'; zamok='🔒'; sym_inc='🔌'; sym_door='🛡';
-    plau_up='△'; play_down='▽'; play_stop='▢'; sym_help='❓'; sm_point='•'; big_point='⚫'; big_plus='➕';
+    plau_up='△'; play_down='▽'; play_stop='▢'; sym_tip='💡'; sym_help='❓'; sm_point='•'; big_point='⚫'; big_plus='➕';
     spnhrs=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
     spnsym=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 fi
 
-#"•" "" "▷" "◁" "" "❌" "❓"
+#"•" "" "▷" "◁" "" "❌" "❓" "🌐" "💬" "📰" "🔏" "🖥️" "📡" "✨" "🔐"
 #empty_check=$(cecho Rs ❎)
 
 #╠╣╢╟✔

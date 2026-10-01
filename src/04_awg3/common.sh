@@ -100,7 +100,7 @@ awg3_rand_b64_32() {
 # метка времени, <r N> случайные байты, <rc N> случайные буквы, <rd N> случайные цифры.
 AWG3_CHAIN=""
 awg3_cps_chain() {
-    local profile=$1 iv=$2 a b pad
+    local profile="$1" iv=$2 a b pad
     case "$profile" in
         quic)
             # QUIC long header: байт типа с установленным fixed bit, версия 1, затем connection ID.
@@ -188,8 +188,8 @@ awg3_gen_sender_params() {
         awg3_rand_int 3 7; jc=$AWG3_REPLY
     fi
     G_Jc=$jc; G_Jmin=$jmin; G_Jmax=$jmax
-    awg3_cps_chain "$AWG3_PROFILE" "$IV"; G_I1="$AWG3_CHAIN"
-    if [[ "$AWG3_ROUTER_MODE" -eq 1 ]]; then
+    awg3_cps_chain "${AWG3_PROFILE}" "${IV}"; G_I1="$AWG3_CHAIN"
+    if [[ "${AWG3_ROUTER_MODE}" -eq 1 ]]; then
         G_I2=""; G_I3=""; G_I4=""; G_I5=""
     else
         awg3_entropy_chain "$IV"; G_I2="$AWG3_CHAIN"
