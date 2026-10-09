@@ -8,9 +8,9 @@ me_alias="awgm"
 
 #SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 #-> Новый SELF без файла на конце
-SELF=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
-BIN_DIR=${SELF}
-PARENT_DIR="$(dirname "$BIN_DIR")"
+SELF="$(dirname "$(readlink -f ${BASH_SOURCE[0]})")"
+BIN_DIR="${SELF}"
+PARENT_DIR="$(dirname "${SELF}")"
 #-> название проекта (берём название корневой папки)
 PROJ_NAME=${PARENT_DIR##*/}
 INCLUDE_DIR="${PARENT_DIR}/include"
@@ -49,6 +49,7 @@ exec_test() {
 echo $OUT_FILE
 echo $SRC_DIR
 echo $BUILD_SCRIPT
+die "Die!"
 exit 0
 }
 

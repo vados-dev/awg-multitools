@@ -18,10 +18,10 @@ if [ -z "$BASH_VERSION" ]; then echo "Запустите через bash: bash $
 #set -euo pipefail
 #set -o pipefail
 
-SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+#SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 #-> Новый SELF без файла на конце
-#SELF=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
-PROJ_ROOT_DIR=${SELF%/*}
+SELF="$(dirname $(readlink -f "${BASH_SOURCE[0]}"))"
+PROJ_ROOT_DIR="${SELF}"
 #<::PROJ_WORK_DIR::>
 PROJ_NAME=${PROJ_WORK_DIR##*/}
 INCLUDE_DIR="${PROJ_WORK_DIR}/include"
