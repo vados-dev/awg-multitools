@@ -1,4 +1,7 @@
 
+#-> Ширина основных элементов:
+COLS_NUM=79
+
 ### Функции контроля курсора:
 #############################
 ESC=$( printf "\033")
@@ -288,7 +291,9 @@ ok_box() {
     printf "    %s\n" "$(align::left $COLS_NUM "$_ok")"
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
 }
-sccess_box() { ok_box "$*"; }
+
+4success_box() { ok_box "$*"; }
+
 failure_box() {
     local _err=$(log_error "$*"); line="$(cecho Rs ${dashes})"
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
