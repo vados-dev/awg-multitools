@@ -96,7 +96,7 @@ ask "    Добавить соединение ${NMCLI_DEF_IFACE} в зону: [
 _add2zone=$(nmcli -c yes con modify ${NMCLI_DEF_IFACE} connection.zone ${add2zone} | awk '{print "    " $0}')
 printf "\n    Добавляю соединение ${NMCLI_DEF_IFACE}:${bgrn} %s\n${nc}" "${_add2zone}";
 nm_restart
-fw_restart
+fwreload
 nmcli_up
 }
 
@@ -109,7 +109,7 @@ else
 _delzone=$(nmcli -c yes con modify ${NMCLI_DEF_IFACE} connection.zone "" | awk '{print "    " $0}')
 printf "\n    Удаляю соединение ${NMCLI_DEF_IFACE} из зоны ${bred} %s\n${nc}" "${_delzone}";
 nm_restart
-fw_restart
+fwreload
 nmcli_up
 fi
 }
