@@ -17,8 +17,17 @@ if [ -z "$BASH_VERSION" ]; then echo "Запустите через bash: bash $
 #set -Eeuo pipefail
 #set -euo pipefail
 #set -o pipefail
+# Файл собран из src/ скриптом build.sh — правки вносить в исходники.
+# Без -e: каждый шаг проверяется явно. С -e любая безобидная
+# ненулевая команда обрывала бы скрипт посреди настройки сети.
+set -uo pipefail
 
-#SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+VERSION="v0.0.28"
+# Буква тестовой сборки (AWGM_BUILD=b ./build.sh): видна в меню, боте и панели,
+# в сравнении версий не участвует. У выпущенной сборки пусто.
+BUILD=""
+VERSION_SHOW="$VERSION$BUILD"
+
 #-> Новый SELF без файла на конце
 SELF="$(dirname $(readlink -f "${BASH_SOURCE[0]}"))"
 PROJ_ROOT_DIR="${SELF}"
