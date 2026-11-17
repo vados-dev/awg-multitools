@@ -8,6 +8,9 @@
 
 #set -Eeuo pipefail
 set -o pipefail
+#set -e -o pipefail
+#shopt -s extglob
+#export LC_ALL=C
 
 ### Переменные:
 ###############
@@ -28,10 +31,16 @@ DIRS=(
     "99_entry"
 )
 
-#SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-#-> Новый SELF без файла на конце
-SELF="$(dirname $(readlink -f "${BASH_SOURCE[0]}"))"
-BUILD_DIR="${SELF}"
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+SELF_DIR="$(dirname "${SELF}")"
+export PATH="${SELF_DIR}:$PATH"
+BUILD_DIR="${SELF_DIR}"
+
+ME_SELF="${SELF##*/}"
+ME_CLEAN="${ME_SELF%.*}"
+PROGRAM="${0##*/:-$ME_CLEAN}"
+ARGS=( "$@" )
+
 
 #-> Подключаем инклюды
 source "${BUILD_DIR}/include/.${BUILD_DIR##*/}-env"
