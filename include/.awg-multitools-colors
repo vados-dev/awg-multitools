@@ -2,7 +2,7 @@
 ### For colors:
 ################
 #-> Можно выключить цвет:
-#NO_COLOR=true
+NO_COLOR=false
 
 ### Цвета и символы:
 ####################
@@ -41,7 +41,7 @@ spn20cols=("" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "")
 
 if [ -t 0 ] && ! $NO_COLOR; then
 #    cecho() { echo -en "$(_c $1)${2:-}\e[0m"; }
-    cecho() { printf "$(_c "$1")%s\033[0m\n" "${2:-}"; }
+    cecho() { printf "$(_c "$1")%b\033[0m\n" "${2:-}"; }
     ok_color() { echo -en "$(_c Gs)${1:-}\e[0m"; }; err_color() { echo -en "$(_c Rs)${1:-}\e[0m"; }
     blk=$(_c K); red=$(_c R); grn=$(_c G); yel=$(_c Y); blu=$(_c B); mag=$(_c M); cy=$(_c C); wh=$(_c W);
     bblk=$(_c sK); bred=$(_c sR); bgrn=$(_c sG); byel=$(_c sY); bblu=$(_c sB); bmag=$(_c sM); bcy=$(_c sC); bwh=$(_c sW);
@@ -58,7 +58,7 @@ if [ -t 0 ] && ! $NO_COLOR; then
     spn20cols=("Ws" "Cs" "Gs" "Ys" "Rs" "Ms" "Bs" "Cs" "Ws" "Ys" "Gs" "Bs" "Ms" "Rs" "Ys" "Ws" "Cs" "Bs" "Gs" "Ys")
 else
 #    cecho() { echo -n "${2}"; }
-    cecho() { printf '%s\n' "${2:-}"; }
+    cecho() { printf '%b\n' "${2:-}"; }
     ok_color() { echo -n "${1}"; }; err_color() { echo -n "${1}"; }
     neg=''; blink=''; rev='';
     blk=''; red=''; grn=''; yel=''; blu=''; mag=''; cy=''; wh='';
