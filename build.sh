@@ -128,6 +128,8 @@ build_modules() {
     done
 }
 
+die() { echo "build: $*" >&2; exit 1; }
+
 cecho sW "Сборка "; cecho sM "${app_name} "; cecho sY "${app_version}"; cecho sW "...\n"
 
 #-> Начинаем с shebang:
