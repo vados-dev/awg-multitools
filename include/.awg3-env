@@ -8,7 +8,7 @@ AWG3_CONF_VER="config version: v$(date '+%Y%m%d-%H%M')-3.1 ($pr_owner edition)."
 AWG3_DEFAULT_IFACE="awg3vds"
 
 AWG3_HOME="${PROJ_ROOT_DIR}/awg3"
-AWG3_CONFIGS="${VPN_CONFIGS}/awg3"
+AWG3_CONFIGS="${VPN_CONFIGS}/awg3vds"
 AWG3_HELPERS="${VPN_HELPERS}/awg3"
 
 AWG3_SERVER_CONFIGS="${AWG3_CONFIGS}/server"

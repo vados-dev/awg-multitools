@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # awg-bot-install.sh — установка и обновление Telegram-бота AWG Toolza.
 #
 # Запускает его awg2 (Telegram-бот → Установить / Обновить), в том числе из
@@ -13,7 +12,10 @@
 #
 # --web-only — только код и venv для веб-панели (awg-web): без токена, без
 # службы бота. Бот, если он уже стоит, перезапускается на новом коде.
-set -euo pipefail
+#set -euo pipefail
+
+
+awg-bot-install() {
 
 REPO_URL="${AWG_REPO_URL:-https://github.com/pumbaX/awg-multi-script}"
 DEST="/opt/awg-bot"
@@ -177,3 +179,4 @@ else
   err "Бот не запустился: journalctl -u awg-bot -n 30"
   exit 1
 fi
+}

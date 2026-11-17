@@ -259,8 +259,6 @@ _cols_pad() {
     printf '%-*s ' "$((w + bytes - chars))" "$s"
 }
 
-
-
 stars=${byel}'✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨✨'${nc};
 line='##############################################################';
 equals='═══════════════════════════════════════════════════════════════════════════════'
@@ -327,7 +325,8 @@ show_window_head() {
     trap "cursor_blink_on; stty echo; printf '\n'; exit" 2
 #    cursor_blink_off
 #    _tty_reset
-    local _str="$(cecho sWb "  $pr_name $app_version  ")$(cecho sW │)$(cecho sWm "  ${mTitle}  ")$(cecho sW │)$(cecho sWb "  Хост: ")$(cecho sfWb "$(hostname)  ")$(cecho sW │)$(cecho sWb " (un)select all : key ([n])[a] ")$(cecho sW │)$(cecho sWb " move : arrow up/down/left/right or keys k/j/l/h ")$(cecho sW │)$(cecho sWb " validation : [enter] ")$(cecho sW │)$(echo -e ${blub})"
+    local _str="$(cecho sWb "  $pr_name $app_version  ")$(cecho sW │)$(cecho sWm "  ${mTitle}  ")$(cecho sW │)$(cecho sWb "  Хост: ")$(cecho sfWb "$(hostname)  ")"
+#$(cecho sW │)$(cecho sWb " (un)select all : key ([n])[a] ")$(cecho sW │)$(cecho sWb " move : arrow up/down/left/right or keys k/j/l/h ")$(cecho sW │)$(cecho sWb " validation : [enter] ")$(cecho sW │)$(echo -e ${blub})"
 #    local _str="$(cecho sWb "  $pr_name $app_version  │)$(cecho sWm "  ${mTitle}  ")$(cecho sWb "│  Хост: ")$(cecho sfWb "$(hostname)  ")$(cecho sWb "│  (un)select all : key ([n])[a]  │  move : arrow up/down/left/right or keys k/j/l/h  │  validation : [enter]  │")$(echo -e ${blub})"
 # column -t -s '|')"
 #    local top_str=$(align::left $(tput cols) "$_str")

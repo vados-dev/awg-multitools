@@ -1507,7 +1507,7 @@ awg2_install() {
     [[ -z "$main_iface" ]] && main_iface=$(ip -o link show | awk -F': ' '{print $2}' | grep -v lo | head -1)
     print_ok "Основной интерфейс: ${main_iface}"
     local server_ip
-    server_ip=$(ipext)
+    server_ip=${ipext}
     [[ -n "$server_ip" ]] && print_ok "Внешний IP: ${server_ip}" || print_warn "Не удалось определить внешний IP"
     # - сохраняем system.env -
     mkdir -p "$AWG2_SETUP"
@@ -1598,7 +1598,7 @@ SYSEOF
 
     # -- ПАРАМЕТРЫ ПЕРВОГО ИНТЕРФЕЙСА --
     print_section "Параметры сервера AmneziaWG"
-    local endpoint_ip=$(ipext)
+    local endpoint_ip=${ipext}
     while true; do
         echo -e "  ${bld}IP по которому клиенты подключаются к серверу."
         echo -e "  ${bld}Если определён верно, просто нажми Enter.${nc}"

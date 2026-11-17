@@ -2,12 +2,7 @@
 ### For colors:
 ################
 #-> Можно выключить цвет:
-NO_COLOR=false
-### Спиннер:
-############
-#-> Цвет спиннера по умолчанию (cecho-код):
-spin_color=${custom_spin_color:-"Ks"}
-spin_max_time=${custom_spin_max_time:-"30"}
+#NO_COLOR=true
 
 ### Цвета и символы:
 ####################
@@ -32,8 +27,18 @@ _c() { [ $# == 0 ] && printf "\e[0m" || printf "$1" | sed 's/\(.\)/\1;/g;s/\([SD
 nc=$(_c); bld=$(echo -en $(_c s)); sma=$(echo -en $(_c d)); und=$(echo -en $(_c u)); strt=$(echo -en $(_c t));
 bnc=$(_c 0s);
 
+### Спиннер:
+############
+#-> Цвет спиннера по умолчанию (cecho-код):
+spin_color=${custom_spin_color:-"Ks"}
+spin_max_time=${custom_spin_max_time:-"30"}
+
+### cecho:
+##########
+cecho() { if [ -t 1 ] && [ -n "${1:-}" ]; then printf "$(_c "$1")%s\033[0m\n" "${2:-}"; else printf '%s\n' "${2:-}"; fi; }
+
 if [ -t 0 ] && ! $NO_COLOR; then
-    cecho() { echo -en "$(_c $1)${2:-}\e[0m"; }
+#    cecho() { echo -en "$(_c $1)${2:-}\e[0m"; }
     ok_color() { echo -en "$(_c Gs)${1:-}\e[0m"; }; err_color() { echo -en "$(_c Rs)${1:-}\e[0m"; }
     blk=$(_c K); red=$(_c R); grn=$(_c G); yel=$(_c Y); blu=$(_c B); mag=$(_c M); cy=$(_c C); wh=$(_c W);
     bblk=$(_c sK); bred=$(_c sR); bgrn=$(_c sG); byel=$(_c sY); bblu=$(_c sB); bmag=$(_c sM); bcy=$(_c sC); bwh=$(_c sW);
@@ -58,7 +63,7 @@ if [ -t 0 ] && ! $NO_COLOR; then
 
     spnsym=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
 else
-    cecho() { echo -n "${2}"; }
+#    cecho() { echo -n "${2}"; }
     ok_color() { echo -n "${1}"; }; err_color() { echo -n "${1}"; }
     neg=''; blink=''; rev='';
     blk=''; red=''; grn=''; yel=''; blu=''; mag=''; cy=''; wh='';

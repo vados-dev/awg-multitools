@@ -468,7 +468,7 @@ _rollback_server_init() {
 get_eplist() {
     local lst=()
     local return_value
-    local epipv4="$(ipext)"
+    local epipv4="${ipext}"
     validate_ip "$ephost" > /dev/null 2>&1 && lst="${epipv4}" || { log_error "IPv4 ${epiv4} не катит!"; return 1; }
 
     local ephost="$(hostname)"
@@ -484,7 +484,7 @@ awg3_set_endpoint() {
     local _epLst=$(get_eplist)
     single_select "true" result _epLst 0 "IP или имя endpoint"
     name="$result"
-#    ask "IP или имя endpoint:" "$ipext" name
+    #ask "IP или имя endpoint:" "${ipext}" name
     [[ -n "$name" ]] || log_error "Укажите адрес или имя хоста: 111.222.333.444 | vpn.example.com!"; return 1;
     [[ "$name" =~ ^[a-zA-Z0-9._-]+$ ]] || log_error "недопустимое имя хоста: '$name'"; return 1;
     [[ -f "$AWG3_SYSCONF" ]] || log_error "Серверный конфиг не найден: ${AWG3_SYSCONF}!"; return 1;
