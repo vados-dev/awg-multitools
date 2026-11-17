@@ -44,14 +44,20 @@ _fix_owner() {
 
 ### Функции определения внешнего интерфейса:
 ############################################
-#ifext="$(ip route show default 2>/dev/null | awk '/default/{print $5}' | head -1 || echo '')"
+#-> External interface variable (method 1):
 ifext="$(ip route show default | grep -oP 'dev \K\S+')";
-#myip() { _ip=$(curl -4 -fsSL --connect-timeout 5 ifconfig.me 2>/dev/null || echo ''); [ -t 0 ] && [ -z "$NO_COLOR" ] 2>/dev/null && printf "$(cecho sM %s)\n" "$_ip" || printf "%s\n" "$_ip"; }
+#-> External interface function (method 2):
+ifext() { ip route show default 2>/dev/null | awk '/default/{print $5}' | head -1 || echo ''; }
+
+#-> External IPv4 variable (method 1):
 ipext=$(curl -4 -fsSL --connect-timeout 5 ifconfig.me 2>/dev/null || echo ''); # printf "$(cecho sM %s)\n" "$_ip"
-#ipext="$(ip route show default | grep -oP 'via \K\S+')";
-# Тоже самое, только функция:
+
+#-> External IPv4 function (method 2):
 ipext() { printf '%s' "$(curl -4 -fsSL --connect-timeout 5 ifconfig.me 2>/dev/null || echo '')"; } 
 #printf "$(cecho sM %s)\n" "$_ip"; }
+
+#-> IPv4 default gateway variable (method 1):
+ipdefgw="$(ip route show default | grep -oP 'via \K\S+')";
 
 gdbyip() {
     if [[ "$1" != "" ]]; then

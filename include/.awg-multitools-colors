@@ -27,18 +27,21 @@ _c() { [ $# == 0 ] && printf "\e[0m" || printf "$1" | sed 's/\(.\)/\1;/g;s/\([SD
 nc=$(_c); bld=$(echo -en $(_c s)); sma=$(echo -en $(_c d)); und=$(echo -en $(_c u)); strt=$(echo -en $(_c t));
 bnc=$(_c 0s);
 
-### Спиннер:
+### Спиннеры:
 ############
 #-> Цвет спиннера по умолчанию (cecho-код):
 spin_color=${custom_spin_color:-"Ks"}
 spin_max_time=${custom_spin_max_time:-"30"}
-
-### cecho:
-##########
-cecho() { if [ -t 0 ] && [ -n "${1:-}" ] && ! $NO_COLOR; then printf "$(_c "$1")%s\033[0m\n" "${2:-}"; else printf '%s\n' "${2:-}"; fi; }
+spnsym=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+spnhrs=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+#-> Заготовки для Spinner 20 frames:
+frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+#-> Пустые цвета по умолчанию:
+spn20cols=("" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "" "")
 
 if [ -t 0 ] && ! $NO_COLOR; then
 #    cecho() { echo -en "$(_c $1)${2:-}\e[0m"; }
+    cecho() { printf "$(_c "$1")%s\033[0m\n" "${2:-}"; }
     ok_color() { echo -en "$(_c Gs)${1:-}\e[0m"; }; err_color() { echo -en "$(_c Rs)${1:-}\e[0m"; }
     blk=$(_c K); red=$(_c R); grn=$(_c G); yel=$(_c Y); blu=$(_c B); mag=$(_c M); cy=$(_c C); wh=$(_c W);
     bblk=$(_c sK); bred=$(_c sR); bgrn=$(_c sG); byel=$(_c sY); bblu=$(_c sB); bmag=$(_c sM); bcy=$(_c sC); bwh=$(_c sW);
@@ -47,23 +50,15 @@ if [ -t 0 ] && ! $NO_COLOR; then
     rev=$(tput rev); blink=$(_c f); neg=$(_c n);
     sym_ok=$(cecho Gs √); spin_ok=$(cecho Gs '✔'); sym_cancel=$(cecho Rs ✘); sym_err=$(cecho Rf ❌); install=$(cecho 0 💿); sym_install=$(cecho Gs 📦); sym_wait=$(cecho Ys ⏳); warning=$(cecho Ys '!');
     sym_warn=$(cecho Ys ⚡); sym_stick=$(cecho Rs 📌); sym_info=$(cecho Bs 📋); sym_docs=$(cecho Ws 📖); sym_dbg=$(cecho Ws 🔧); sym_star=$(cecho Ys ✨); sym_search=$(cecho Ws 🔍); sym_sec=$(cecho Rs '🧱');
-    sym_folder=$(cecho Ys 📁); sym_hand=$(cecho sY 👉); minus=$(cecho Rf —); plus=$(cecho Gs +); sym_sel=$(cecho Gs ✅); sym_unsel=(cecho 0 ❎); warn=$(cecho Ys ▲); sym_service=$(cecho Ws '🛠');
+    sym_folder=$(cecho Ys 📁); sym_hand=$(cecho sY 👉); minus=$(cecho Rf —); plus=$(cecho Gs +); big_plus=$(cecho R ➕); sym_sel=$(cecho Gs ✅); sym_unsel=(cecho 0 ❎); warn=$(cecho Ys ▲); sym_service=$(cecho Ws '🛠');
     arr_right=$(cecho Ws →); arr_left=$(cecho Ws ←); arr_up=$(cecho Ws ↑); arr_down=$(cecho Ws ↓); arr_gor=$(cecho Ws ↔); arr_vert=$(cecho Ws ↕); zamok=$(cecho Rs 🔒); sym_inc=$(cecho Gs 🔌); sym_door=$(cecho Ws '🛡');
-    play_up=$(cecho Gs △); play_down=$(cecho Gs ▽); play_stop=$(cecho Gs ▢); sym_help=$(cecho R ❓); sym_tip=$(cecho Ys 💡); sm_point=$(cecho Ws •); big_point=$(cecho Ws ⚫); big_plus=$(cecho R ➕);
-    spn20() {
-    local -a spn20cols=("Ws" "Cs" "Gs" "Ys" "Rs" "Ms" "Bs" "Cs" "Ws" "Ys" "Gs" "Bs" "Ms" "Rs" "Ys" "Ws" "Cs" "Bs" "Gs" "Ys")
-    local -a frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    local -a result=()
-    local i
-    for i in "${!frames[@]}"; do
-        result+=("$(cecho "${spn20cols[$((i+1))]}" "${frames[i]}")")
-    done
-    printf '%s\n' "${result[@]}"
-    }
-
-    spnsym=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    play_up=$(cecho Gs △); play_down=$(cecho Gs ▽); play_right=$(cecho Gs ▷); play_left=$(cecho Gs ◁); play_stop=$(cecho Gs ▢);
+    sym_tip=$(cecho Ys 💡); sym_help=$(cecho R ❓); sm_point=$(cecho Ws •); big_point=$(cecho Ws ⚫);
+    #-> Цвета для Spinner 20 frames:
+    spn20cols=("Ws" "Cs" "Gs" "Ys" "Rs" "Ms" "Bs" "Cs" "Ws" "Ys" "Gs" "Bs" "Ms" "Rs" "Ys" "Ws" "Cs" "Bs" "Gs" "Ys")
 else
 #    cecho() { echo -n "${2}"; }
+    cecho() { printf '%s\n' "${2:-}"; }
     ok_color() { echo -n "${1}"; }; err_color() { echo -n "${1}"; }
     neg=''; blink=''; rev='';
     blk=''; red=''; grn=''; yel=''; blu=''; mag=''; cy=''; wh='';
@@ -71,14 +66,28 @@ else
     bblk=''; bred=''; bgrn=''; byel=''; bblu=''; bmag=''; bcy=''; bwh='';
     sym_ok='√'; spin_ok='✓'; sym_cancel='✘'; sym_err='❌'; install='💿';sym_install='📦'; sym_wait='⏳'; warning='!';
     sym_warn='⚡'; sym_stick='📌'; sym_info='📋'; sym_docs='📖'; sym_dbg='🔧'; sym_star='✨'; sym_search='🔍'; sym_sec='🧱';
-    sym_folder='📁'; sym_hand='👉'; minus='—'; plus=1'+'; sym_sel='✅'; sym_unsel='❎'; warn='▲'; sym_service='🛠';
+    sym_folder='📁'; sym_hand='👉'; minus='—'; plus='+'; big_plus='➕'; sym_sel='✅'; sym_unsel='❎'; warn='▲'; sym_service='🛠';
     arr_right='→'; arr_left='←'; arr_up='↑'; arr_down='↓'; arr_gor='↔'; arr_vert='↕'; zamok='🔒'; sym_inc='🔌'; sym_door='🛡';
-    plau_up='△'; play_down='▽'; play_stop='▢'; sym_tip='💡'; sym_help='❓'; sm_point='•'; big_point='⚫'; big_plus='➕';
-    spnhrs=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏' '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    spnsym=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    play_up='△'; play_down='▽'; play_right='▷'; play_left='◁'; play_stop='▢';
+    sym_tip='💡'; sym_help='❓'; sm_point='•'; big_point='⚫';
 fi
 
-#"•" "" "▷" "◁" "" "❌" "❓" "🌐" "💬" "📰" "🔏" "🖥️" "📡" "✨" "🔐"
+#-> Функция для Spinner 20 frames:
+spn20() {
+    local -a result=()
+    local i
+    for i in "${!frames[@]}"; do
+        result+=("$(cecho "${spn20cols[$((i+1))]}" "${frames[i]}")")
+    done
+    printf '%s\n' "${result[@]}"
+}
+
+
+#"🌐" "💬" "📰" "🔏" "🖥️" "📡" "✨" "🔐"
 #empty_check=$(cecho Rs ❎)
 
 #╠╣╢╟✔
+
+### cecho:
+##########
+#cecho() { if [ -t 0 ] && [ -n "${1:-}" ] && ! $NO_COLOR; then printf "$(_c "$1")%s\033[0m\n" "${2:-}"; else printf '%s\n' "${2:-}"; fi; }
