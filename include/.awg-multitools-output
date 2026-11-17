@@ -292,7 +292,7 @@ ok_box() {
     printf "    %s\n" "$(align::left $COLS_NUM "$line")"
 }
 
-4success_box() { ok_box "$*"; }
+success_box() { ok_box "$*"; }
 
 failure_box() {
     local _err=$(log_error "$*"); line="$(cecho Rs ${dashes})"

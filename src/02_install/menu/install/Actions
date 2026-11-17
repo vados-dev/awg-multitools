@@ -3,4 +3,5 @@ basic_install
 install_awg_mod
 awg2_install
 awg3_install
+awg-bot-install
 install_utils
