@@ -35,7 +35,7 @@ spin_max_time=${custom_spin_max_time:-"30"}
 
 ### cecho:
 ##########
-cecho() { if [ -t 1 ] && [ -n "${1:-}" ]; then printf "$(_c "$1")%s\033[0m\n" "${2:-}"; else printf '%s\n' "${2:-}"; fi; }
+cecho() { if [ -t 0 ] && [ -n "${1:-}" ] && ! $NO_COLOR; then printf "$(_c "$1")%s\033[0m\n" "${2:-}"; else printf '%s\n' "${2:-}"; fi; }
 
 if [ -t 0 ] && ! $NO_COLOR; then
 #    cecho() { echo -en "$(_c $1)${2:-}\e[0m"; }
