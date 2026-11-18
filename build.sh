@@ -12,40 +12,15 @@ set -o pipefail
 #shopt -s extglob
 #export LC_ALL=C
 
-# Генератор CPS встраивается в одинарных кавычках, как в прежних версиях:
-# Telegram-бот вырезает его из установленного awg2 по этим якорям.
-grep -q "'" src/py/cpsgen.py && die "в src/py/cpsgen.py есть одинарная кавычка — она разорвёт встраивание"
-grep -qx '__AWG2_PY_HELPER__' src/py/helper.py && die "в helper.py встречается строка-терминатор heredoc"
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+SELF_DIR="$(dirname "${SELF}")"
+export PATH="${SELF_DIR}:$PATH"
+BUILD_DIR="${SELF_DIR}"
 
-tmp=$(mktemp)
-trap 'rm -f "$tmp"' EXIT
-
-# Буква тестовой сборки — только в показ версии
-BUILD="${AWGM_BUILD:-}"
-[[ -z "$BUILD" || "$BUILD" =~ ^[a-z]$ ]] || die "AWGM_BUILD — одна строчная буква"
-
-{
-  sed "s/^BUILD=\"\"$/BUILD=\"$BUILD\"/" src/head.sh
-  for lib in "${LIBS[@]}"; do
-    f="src/lib/${lib}.sh"
-    [[ -f "$f" ]] || die "нет $f"
-    printf '\n# ═════ %s ═════\n' "$lib"
-    cat "$f"
-  done
-
-  printf '\n# ═════ встроенный Python ═════\n'
-  echo "# CPS_GENERATOR_BEGIN v2 — генератор I1-I5 (порт payloadGen). Бот вырезает"
-  echo "# этот блок из установленного awg2: якоря не переименовывать."
-  printf "_CPS_GENERATOR='\n"
-  cat src/py/cpsgen.py
-  printf "'\n# CPS_GENERATOR_END v2\n\n"
-
-  # Хеш — имя каталога закэшированного помощника: новая версия кода — новый каталог
-  echo "_PY_HELPER_SUM=$(sha256sum src/py/helper.py | cut -c1-16)"
-  echo "IFS= read -r -d '' _PY_HELPER <<'__AWG2_PY_HELPER__' || true"
-  cat src/py/helper.py
-  printf '__AWG2_PY_HELPER__\n\n'
-} > "$tmp"
+ME_SELF="${SELF##*/}"
+ME_CLEAN="${ME_SELF%.*}"
+PROGRAM="${0##*/:-$ME_CLEAN}"
+ARGS=( "$@" )
 
 ### Переменные:
 ###############
@@ -65,17 +40,6 @@ DIRS=(
     "90_main"
     "99_entry"
 )
-
-SELF="$(readlink -f "${BASH_SOURCE[0]}")"
-SELF_DIR="$(dirname "${SELF}")"
-export PATH="${SELF_DIR}:$PATH"
-BUILD_DIR="${SELF_DIR}"
-
-ME_SELF="${SELF##*/}"
-ME_CLEAN="${ME_SELF%.*}"
-PROGRAM="${0##*/:-$ME_CLEAN}"
-ARGS=( "$@" )
-
 
 #-> Подключаем инклюды
 source "${BUILD_DIR}/include/.${BUILD_DIR##*/}-env"
@@ -143,7 +107,6 @@ build_menu() {
     done
 }
 
-
 ### Сборка модулей:
 ###################
 # Сборка модуля: common.sh + module.sh → в MAIN_SCRIPT, подпапка menu/ → build_menu
@@ -172,9 +135,24 @@ build_modules() {
     done
 }
 
-die() { echo "build: $*" >&2; exit 1; }
-
 cecho sW "Сборка "; cecho sM "${app_name} "; cecho sY "${app_version}"; cecho sW "...\n"
+
+cd ${SRC_DIR}
+# Генератор CPS встраивается в одинарных кавычках, как в прежних версиях:
+# Telegram-бот вырезает его из установленного awg2 по этим якорям.
+grep -q "'" py/cpsgen.py && die "в py/cpsgen.py есть одинарная кавычка — она разорвёт встраивание"
+grep -qx '__AWG3_PY_HELPER__' py/helper.py && die "в helper.py встречается строка-терминатор heredoc"
+
+#tmp=$(mktemp)
+#trap 'rm -f "$tmp"' EXIT
+
+# Буква тестовой сборки — только в показ версии
+BUILD="${AWGM_BUILD:-}"
+[[ -z "$BUILD" || "$BUILD" =~ ^[a-z]$ ]] || die "AWGM_BUILD — одна строчная буква"
+
+{
+cd ${SRC_DIR}
+sed "s/^BUILD=\"\"$/BUILD=\"$BUILD\"/" 00_head/module.sh
 
 #-> Начинаем с shebang:
 printf '#!/usr/bin/env bash\n\n' > "${MAIN_SCRIPT}"
@@ -196,6 +174,30 @@ for d in "${DIRS[@]}"; do
         ! build_modules "${d}" "" >> "${MAIN_SCRIPT}" && { log_warn "Модуль ${d} не добавлен."; } || { log_ok "Добавлен модуль: ${d}."; }
     fi
 done
+
+  printf '\n# ═════ встроенный Python ═════\n'
+  echo "# CPS_GENERATOR_BEGIN v2 — генератор I1-I5 (порт payloadGen). Бот вырезает"
+  echo "# этот блок из установленного awg2: якоря не переименовывать."
+  printf "_CPS_GENERATOR='\n"
+  cat py/cpsgen.py
+  printf "'\n# CPS_GENERATOR_END v2\n\n"
+
+  # Хеш — имя каталога закэшированного помощника: новая версия кода — новый каталог
+  echo "_PY_HELPER_SUM=$(sha256sum py/helper.py | cut -c1-16)"
+  echo "IFS= read -r -d '' _PY_HELPER <<'__AWG2_PY_HELPER__' || true"
+  cat py/helper.py
+  printf '__AWG2_PY_HELPER__\n\n' 
+} >> "${MAIN_SCRIPT}"
+
+{
+  echo "_BUILD_SUM=$(sha256sum "${MAIN_SCRIPT}" | cut -c1-16)"
+  echo 'main "$@"'
+} >> "${MAIN_SCRIPT}"
+
+bash -n "${MAIN_SCRIPT}" || die "синтаксическая ошибка в собранном файле"
+#mkdir -p "$(dirname "$OUT")"
+#install -m 755 "$tmp" "$OUT"
+#echo "build: $OUT ($(wc -l < "$OUT") строк, $(( $(wc -c < "$OUT") / 1024 )) КБ)"
 
 #for f in "${FILES[@]}"; do
 #    src="${SRC_DIR}/${f}"
